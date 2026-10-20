@@ -76,7 +76,7 @@ L = {
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
            "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}",
            "rt_note": "<i>The price includes the return flight.</i>",
-           "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg}: +{fee}{src}, already in the price", "no": "🧳 Bag NOT included",
+           "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg}: +{fee}, already in the price", "no": "🧳 Bag NOT included",
            "unk": "🧳 Bag <b>not</b> in this price, add the fee before booking", "off": "🎒 No checked bag"},
     "he": {"first": "🎯 <b>התחלתי לעקוב!</b> המחיר הזול ביותר כרגע:", "new_low": "📉 <b>מחיר נמוך חדש!</b> (קודם {was})",
            "now": "🔎 <b>הזול ביותר כרגע</b> · הנמוך אי פעם {low} ({when})",
@@ -88,7 +88,7 @@ L = {
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
            "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
-           "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg}: +{fee}{src}, כבר בתוך המחיר", "no": "🧳 מזוודה לא כלולה",
+           "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg}: +{fee}, כבר בתוך המחיר", "no": "🧳 מזוודה לא כלולה",
            "unk": "🧳 המזוודה <b>לא</b> כלולה במחיר, להוסיף את העלות לפני הזמנה", "off": "🎒 בלי מזוודה"},
 }
 
@@ -222,8 +222,7 @@ def format_offer(t, o, head):
         f"🛩 {esc(o['airline'])}",
         f"🕐 {esc(route)}",
         f"↔️ {esc(stops)} · {o['duration_min'] // 60}h {o['duration_min'] % 60:02d}m",
-        s["added" if o.get("bag_fee") else "yes"].format(fee=money(o["bag_fee"], o["currency"]), kg=f" ({o['bag_kg']} kg)" if o.get("bag_kg") else "",
-                                                         src=f" ({esc(o['bag_src'])}'s price for this flight)" if o.get("bag_src") else "")
+        s["added" if o.get("bag_fee") else "yes"].format(fee=money(o["bag_fee"], o["currency"]), kg=f" ({o['bag_kg']} kg)" if o.get("bag_kg") else "")
         if bag == "yes" else s[bag],
         "",
         f'<a href="{esc(o["link"])}">{s["book"].format(src=esc(o["source"]))}</a>',
@@ -261,7 +260,7 @@ def add_bag_prices(offers):
         # ponytail: matched on the first outbound flight number; the bag fee covers the whole trip as that source priced it
         k = fees.get(o.segments[0][4])
         if o.bag_included is None and k:
-            o.price, o.bag_included, o.bag_fee, o.bag_kg, o.bag_src = o.price + k.bag_fee, True, k.bag_fee, k.bag_kg, k.source
+            o.price, o.bag_included, o.bag_fee, o.bag_kg = o.price + k.bag_fee, True, k.bag_fee, k.bag_kg
 
 
 def evaluate(t, best, report, ok=True):

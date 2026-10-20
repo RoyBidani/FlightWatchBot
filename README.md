@@ -344,7 +344,7 @@ Type `/` in the chat to get the command menu (the bot registers it on startup).
 🛩 SWISS
 🕐 04:50 TLV → ZRH → 16:30 LAX
 ↔️ 1 stop in ZRH · 21h 40m
-🧳 Bag (23 kg): +544 ₪ (Kiwi.com's price for this flight), already in the price
+🧳 Bag (23 kg): +544 ₪, already in the price
 
 🔎 Open on Google Flights             ← link to the same search
 The price includes the return flight; you pick it on Google.

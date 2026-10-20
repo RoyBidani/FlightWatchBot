@@ -126,6 +126,6 @@ k1 = Offer(5217, "ILS", "El Al", [["TLV", "AMS", "2027-04-20 16:10", "2027-04-20
 k2 = Offer(4819, "ILS", "El Al", [["TLV", "AMS", "2027-04-20 16:10", "2027-04-20 20:15", "LY339"]], 0, 305, True, "Kiwi.com", "k", bag_fee=484, bag_kg=23)
 other = Offer(3000, "ILS", "Wizz", [["TLV", "AMS", "2027-04-20 09:00", "2027-04-20 13:00", "W41"]], 0, 240, None, "Google Flights", "g")
 main.add_bag_prices([g, k1, k2, other])
-assert (g.price, g.bag_included, g.bag_fee, g.bag_kg) == (4522, True, 484, 23) and g.bag_src == "Kiwi.com" and g.source == "Google Flights", "cheapest bag fee for the same flight"
+assert (g.price, g.bag_included, g.bag_fee, g.bag_kg) == (4522, True, 484, 23) and g.source == "Google Flights", "cheapest bag fee for the same flight"
 assert other.price == 3000 and other.bag_included is None, "no bag price for an unmatched flight"
 print("ok")

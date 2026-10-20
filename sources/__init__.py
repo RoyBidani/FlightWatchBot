@@ -19,7 +19,6 @@ class Offer:
     link: str
     bag_fee: float = 0
     bag_kg: int = 0
-    bag_src: str = ""
     fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
