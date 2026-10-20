@@ -14,14 +14,20 @@ What was tried, when, and what came out of it. Update this file every time a sou
 
 ## Google Flights via fast-flights
 
-- Builds Google's `tfs` protobuf query (dates, airports, stops, cabin, adults, `checked_bags`) and fetches
+- Builds Google's `tfs` protobuf query (dates, airports, stops, cabin, adults) and fetches
   `https://www.google.com/travel/flights` with `primp` (Chrome TLS fingerprint), no browser.
 - The answer is in `<script class="ds:1">`. `payload[2][0]` = "best flights", `payload[3][0]` = "other flights".
   fast-flights 3.1.0's own parser reads only `[3]` and misses the cheapest offer, so `google.py` parses both.
   Per itinerary `k`: `k[1][0][1]` price, `k[0][1]` airlines, `k[0][2]` segments, `k[0][9]` total minutes.
   Per segment `s`: `s[3]`/`s[6]` airports, `s[20]`/`s[21]` dates, `s[8]`/`s[10]` times, `s[22][0:2]` flight number.
-- `checked_bags=1` makes Google add its estimated checked-bag fee to the price, so offers count as bag included.
-  What `1` means for pax > 1 (total vs per passenger) is unverified.
+- **Bags: not priced.** fast-flights' `checked_bags=1` is meant to make Google add the bag fee. Tested 2026-10-20 on
+  TLV→ATH, TLV→BUD, TLV→LHR: 23 itineraries, every price identical with and without (Wizz Air too). Google ignores it,
+  so `google.py` no longer sends it and marks offers `bag_included=None` on bag trips; alerts say the bag is not in
+  the price. Getting real bag fees needs another source or Google's per-itinerary booking call. Open item.
+- **Error replies.** A `data:` payload ending in `errorHasStatus: true` starts with a status code: `3` = nothing on sale
+  for these dates (e.g. > ~330 days out) → treated as no flights; `13` = temporary Google error, seen ~1 in 6 calls
+  from AWS on 2026-10-20 → retried up to 3 times, then the source fails for this check.
+- **Unpriced itineraries.** From AWS Google sometimes lists a flight with an empty price block (`k[1] == []`). Skipped.
 - Round trips: the itinerary is the outbound leg; the price is the round-trip total with the cheapest return.
 - `fast-flights` is pinned to 3.1.0 because `google.py` imports its query builder; the payload indexes are ours.
 - **Fragile**: breaks when Google changes the payload. Symptom: `google failed: no results script in page` or

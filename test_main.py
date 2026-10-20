@@ -29,6 +29,13 @@ assert "Tracking #1" in chat("yes")
 t = main.state["trips"][0]
 assert t["bag"] and t["ret"] is None and t["stops"] == 0 and main.PENDING.pop() == {"trip_id": 1}
 
+real = main.SOURCES["fake"]
+main.SOURCES["fake"] = lambda t: 1 / 0
+main.check_all()
+assert not sent and not t.get("empty_announced"), "a failing source is not 'no offers'"
+main.check_all(chat="7", report=True)
+assert "Couldn't reach" in sent.pop()
+main.SOURCES["fake"] = real
 main.check_all(); main.check_all()
 assert len(sent) == 1 and "No matching offers" in sent[0], "empty first check announced once"
 sent.clear()

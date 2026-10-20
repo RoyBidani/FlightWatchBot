@@ -107,7 +107,7 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
 ### Every check, for every trip
 
 ```
- offers from Google ──► keep only: exact going date, stops ≤ allowed, bag priced in (if you asked for a bag)
+ offers from Google ──► keep only: exact going date, stops ≤ allowed, same currency
                                    │
                                    ▼
                           cheapest matching offer
@@ -162,7 +162,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 1 | Read Yad2SearchBot | Reused its Telegram send-with-retry, HTML message style, README layout. Left behind Playwright and the Mac launchd timer: a bot that must answer chats needs to run all the time, on a server |
 | 2 | Pick a price source | The plan was the Amadeus API. **Amadeus shut down its free self-service API on 2026-07-17**, so it was out. Duffel charges per search without bookings, SerpApi is paid above 250 searches/month, travel sites (Kayak, Skyscanner) block bots. Details in [sources.md](sources.md) |
 | 3 | Probe Google Flights | The `fast-flights` library calls Google Flights with plain HTTP. TLV→LAX returned real prices in ~1.2 s. Its own parser skipped Google's "best flights" section, which held the cheapest fare, so `sources/google.py` reads the page data itself |
-| 4 | Bags | Google can add its estimated checked-bag fee to every price (`checked_bags=1`), so bag trips compare prices with the bag included. A fare with an unknown bag fee never silently beats one with a known fee |
+| 4 | Bags | The plan was to let Google add its checked-bag fee to every price (`checked_bags=1`). Tested later (step 15): **Google ignores it**, prices are identical with and without. Prices are fares without the bag, and alerts say so |
 | 5 | Write the bot | `main.py`: Telegram long-poll, the setup chat, the price rules (first price, ≥ 50 ₪ / 2% drop, 14-day "book it", stop 3 days before departure), atomic `trips.json`, safe shutdown |
 | 6 | Self-check | `test_main.py` drives the whole flow with fake prices: setup, thresholds, bag rules, per-user isolation, auto-stop |
 | 7 | Safety pass | Found the bot token leaking into logs through error messages that include the URL; it is now masked as `***` |
@@ -173,6 +173,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 12 | Requests from use | Added "Direct flights only?" as a 5th setup question. Every message now shows "Going: Thu 9 Sep 2027 / Returning: Fri 24 Sep 2027" |
 | 13 | Live tests | First-price message, new-low alert (faked a higher low in `trips.json`), `/check`, `/status`, instance reboot: all passed |
 | 14 | Managing trips | `/edit` to change dates, bag, stops or passengers of a trip; `/` command menu in Telegram |
+| 15 | Bug: "no offers" for a trip 2 months out | TLV→ATH in Dec said "no offers". From AWS, Google sometimes answers with a temporary error (status 13, ~1 in 6 calls) and sometimes lists one flight with no price; the bot read the first as "no flights" and crashed on the second. Now: retry on errors, only status 3 (dates not on sale) means "no flights", unpriced flights are skipped, and a failed source never produces a "no offers" message |
 
 ---
 
@@ -288,7 +289,8 @@ Open the bot, press **Start**. It asks five things, one at a time:
 1. From where (`Tel Aviv` or `TLV`)
 2. To where (`Los Angeles`, `LA` or `LAX`)
 3. Dates: going and returning, `2027-09-09 2027-09-24`, or one date for one way (`9.9.2027` works too)
-4. Checked bag: `yes` (one 23 kg bag per passenger, fee included in the compared price) or `no`
+4. Checked bag: `yes` or `no`. Google prices do **not** include a checked bag, so with `yes` every alert reminds you to
+   add the bag fee before booking (low-cost airlines like Wizz charge for it, El Al and most legacy fares include it)
 5. Direct flights only: `yes` (nonstop) or `no` (up to 1 connection)
 
 It shows a summary, you answer `yes`, and the current cheapest price arrives within seconds
@@ -324,7 +326,7 @@ New lowest price (was 6,890 ₪)
 6,673 ₪ round trip, 1 adult(s)
 El Al
 Going flight: TLV 01:05 → LAX 06:00, nonstop, 14h 55m
-Checked bag: included in price
+Checked bag: NOT in this price, check the bag fee before booking
 Source: Google Flights
 Price includes the return flight; pick it on the booking page.
 Book / open search                ← link to the same search on Google Flights
@@ -409,7 +411,8 @@ Live checks on the running bot:
 | `google failed: no results script in page (consent/captcha?)` | Google refused this IP or changed the page. Set `SERPAPI_KEY`; see [sources.md](sources.md) |
 | `google failed: IndexError ...` / `TypeError ...` | Google changed the page data layout. Update `sources/google.py` |
 | `source serpapi disabled: SERPAPI_KEY not set` | expected without a key |
-| `trip N google: 0 offers` | dates more than ~330 days out (not on sale yet), or rules too strict (direct only, bag). Wait, or try `stops=1` |
+| `trip N google: 0 offers` | dates more than ~330 days out (not on sale yet), or rules too strict (direct only). Wait, or try `stops=1` |
+| `trip N google failed: google error status 13 three times in a row` | Google had a temporary problem; no message is sent, the next check retries |
 | `telegram <id> -> 403` | that user blocked the bot. Their trips stay in `trips.json`; `/stop` them or ignore |
 | no `check done:` for > 3 hours | service down: `systemctl status flightbot`, `journalctl -u flightbot -n 50` |
 | bot answers but alerts never come | prices did not drop enough. `/check` shows the current cheapest |

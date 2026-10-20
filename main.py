@@ -72,7 +72,7 @@ L = {
            "stops": "{n} stop(s) via {via}", "src": "Source", "book": "Book / open search",
            "rt_note": "Price includes the return flight; pick it on the booking page.",
            "yes": "Checked bag: included in price", "no": "Checked bag: NOT included",
-           "unk": "Checked bag: unknown, verify before booking", "off": "No checked bag (not requested)"},
+           "unk": "Checked bag: NOT in this price, check the bag fee before booking", "off": "No checked bag (not requested)"},
     "he": {"first": "התחלתי לעקוב. המחיר הזול ביותר כרגע:", "new_low": "מחיר נמוך חדש (קודם {was})",
            "now": "הזול ביותר כרגע. הנמוך אי פעם {low} ({when})",
            "plateau": "אין מחיר נמוך יותר כבר 14 יום. הנמוך ביותר: {low} ({when}). להזמין.",
@@ -81,7 +81,7 @@ L = {
            "stops": "{n} עצירות דרך {via}", "src": "מקור", "book": "להזמנה / לחיפוש",
            "rt_note": "המחיר כולל את טיסת החזור, בוחרים אותה בדף ההזמנה.",
            "yes": "מזוודה: כלולה במחיר", "no": "מזוודה: לא כלולה",
-           "unk": "מזוודה: לא ידוע, לבדוק לפני הזמנה", "off": "בלי מזוודה (לא התבקש)"},
+           "unk": "מזוודה: לא כלולה במחיר, לבדוק את עלות המזוודה לפני הזמנה", "off": "בלי מזוודה (לא התבקש)"},
 }
 
 LOCK = threading.Lock()
@@ -185,20 +185,25 @@ def matches(t, o):
 
 
 def cheapest(t):
-    offers = []
+    offers, ok = [], False
     for name, search in SOURCES.items():
         try:
             got = [o for o in search(t) if matches(t, o)]
             log.info("trip %s %s: %s offers, cheapest %s", t["id"], name, len(got), min((o.price for o in got), default=None))
             offers += got
+            ok = True
         except Exception as e:
             log.warning("trip %s %s failed: %s", t["id"], name, (str(e).splitlines() or [repr(e)])[0][:200])
-    return min(offers, key=lambda o: (t["bag"] and o.bag_included is None, o.price), default=None)
+    return min(offers, key=lambda o: (t["bag"] and o.bag_included is None, o.price), default=None), ok
 
 
-def evaluate(t, best, report):
+def evaluate(t, best, report, ok=True):
     s = L[state["chats"][t["chat_id"]]["lang"]]
     cid, low = t["chat_id"], t["current_low"]
+    if best is None and not ok:
+        if report:
+            send(cid, f"{header(t, s)}\nCouldn't reach the price source this time, I'll retry on the next check.")
+        return
     if best is None:
         if report or (low is None and not t.get("empty_announced")):
             if send(cid, f"{header(t, s)}\nNo matching offers right now. Fares for far-off dates "
@@ -240,10 +245,10 @@ def check_all(chat=None, trip_id=None, report=False):
                     days=days, id=t["id"], low=money(low["price"], low["currency"]) if low else "-",
                     when=day(low["found_at"]) if low else "-"))
                 continue
-            best = cheapest(t)
+            best, ok = cheapest(t)
             with LOCK:
                 if t["active"]:
-                    evaluate(t, best, report)
+                    evaluate(t, best, report, ok)
                     save()
         except Exception:
             log.exception("trip %s check failed", t["id"])
@@ -318,7 +323,7 @@ def summary(t):
     return "\n".join([
         f"{t['origin']} ({AIRPORTS.get(t['origin'], '?')}) → {t['dest']} ({AIRPORTS.get(t['dest'], '?')})",
         dates(t),
-        f"Checked bag: {'yes, 23 kg per passenger' if t['bag'] else 'no'}",
+        f"Checked bag: {'yes, 23 kg per passenger (prices shown without the bag fee, see each alert)' if t['bag'] else 'no'}",
         f"{t['pax']} adult(s), {t['cabin']}, " + (f"max {t['stops']} stop(s)" if t["stops"] else "direct only") + f", {t['currency']}",
         f"Alert on a drop of at least {money(t['min_drop'], t['currency'])} or {t['min_drop_pct']}%",
     ])
