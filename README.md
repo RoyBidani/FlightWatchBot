@@ -138,7 +138,8 @@ FlightWatchBot/
 ├── main.py               the whole bot: Telegram loop, setup chat, price logic, state (~480 lines)
 ├── sources/
 │   ├── __init__.py       Offer dataclass + list of enabled sources
-│   ├── google.py         Google Flights, no key (the one in use)
+│   ├── google.py         Google Flights, no key: cheapest fares, bag fee unknown
+│   ├── duffel.py         Duffel airline API, DUFFEL_TOKEN: real checked-bag fares and bag prices
 │   └── serpapi.py        Google Flights through SerpApi, only if SERPAPI_KEY is set (backup)
 ├── sources.md            every price source we looked at: date, result, cost, quirks
 ├── test_main.py          self-check of the setup chat and price logic, no network needed
@@ -177,6 +178,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 14 | Managing trips | `/edit` to change dates, bag, stops or passengers of a trip; `/` command menu in Telegram |
 | 15 | Bug: "no offers" for a trip 2 months out | TLV→ATH in Dec said "no offers". From AWS, Google sometimes answers with a temporary error (status 13, ~1 in 6 calls) and sometimes lists one flight with no price; the bot read the first as "no flights" and crashed on the second. Now: retry on errors, only status 3 (dates not on sale) means "no flights", unpriced flights are skipped, and a failed source never produces a "no offers" message |
 | 16 | Buttons and design | Calendar date picker, tap-to-answer buttons, trip buttons in *My trips*, stop confirmation; every message redesigned with icons, bold dates and prices |
+| 17 | Real bag prices | Google's Bags filter turned out to be carry-on only. Added Duffel (an airline booking API) as a second source: it says per fare whether a 23 kg bag is included and can price one. TLV→ATH with a bag: 747 ₪ (Sky Express), where Google's "cheapest" 544 ₪ had no bag |
 
 ---
 
@@ -276,7 +278,7 @@ To run the real bot locally put `TELEGRAM_BOT_TOKEN=...` in `.env` and run `./ve
 sudo git clone https://github.com/RoyBidani/FlightWatchBot.git /opt/flightbot
 sudo chown -R $USER /opt/flightbot && cd /opt/flightbot
 ./deploy/install.sh                       # first run creates /etc/flightbot.env and stops
-sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN (and SERPAPI_KEY if you have one)
+sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN, DUFFEL_TOKEN (live) for real bag prices
 ./deploy/install.sh                       # venv, deps, systemd unit, enable + start
 ```
 

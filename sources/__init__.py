@@ -17,6 +17,7 @@ class Offer:
     bag_included: bool | None
     source: str
     link: str
+    bag_fee: float = 0
     fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
@@ -27,6 +28,12 @@ try:
     SOURCES["google"] = google.search
 except ImportError as e:
     log.warning("source google disabled: %s", e)
+
+if os.getenv("DUFFEL_TOKEN"):
+    from . import duffel
+    SOURCES["duffel"] = duffel.search
+else:
+    log.warning("source duffel disabled: DUFFEL_TOKEN not set")
 
 if os.getenv("SERPAPI_KEY"):
     from . import serpapi

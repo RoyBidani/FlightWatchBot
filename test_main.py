@@ -114,4 +114,14 @@ assert "Save changes" in str(r[1])
 r = main.handle({"chat": {"id": 7}, "text": "yes"})
 assert "Updated #3" in r[0] and main.state["trips"][2]["out"] == go2 and main.state["trips"][2]["ret"] is None
 main.PENDING.clear()
+from sources import duffel
+assert duffel.minutes("PT14H55M") == 895 and duffel.minutes("P1DT2H5M") == 1565
+svc = [{"type": "baggage", "segment_ids": ["a"], "total_amount": "40", "total_currency": "EUR", "metadata": {"type": "checked", "maximum_weight_kg": 23}},
+       {"type": "baggage", "segment_ids": ["a"], "total_amount": "30", "total_currency": "EUR", "metadata": {"type": "checked", "maximum_weight_kg": 20}},
+       {"type": "baggage", "segment_ids": ["b"], "total_amount": "35", "total_currency": "EUR", "metadata": {"type": "checked", "maximum_weight_kg": 23}},
+       {"type": "baggage", "segment_ids": ["b"], "total_amount": "10", "total_currency": "EUR", "metadata": {"type": "carry_on"}}]
+assert duffel.bag_fee(svc, ["a", "b"], 2) == (150.0, "EUR"), "cheapest 23 kg checked bag per segment group, times passengers"
+assert duffel.bag_fee(svc[:2], ["a", "b"], 1) == (None, None), "no bag sold for segment b"
+seg = lambda q: {"passengers": [{"baggages": [{"type": "checked", "quantity": q}]}]}
+assert duffel.bags_included({"slices": [{"segments": [seg(1), seg(1)]}]}) and not duffel.bags_included({"slices": [{"segments": [seg(1), seg(0)]}]})
 print("ok")
