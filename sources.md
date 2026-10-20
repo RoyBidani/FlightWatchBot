@@ -54,5 +54,8 @@ What was tried, when, and what came out of it. Update this file every time a sou
   `bagsInfo.checkedBagTiers[0]` is that bag's share of the price and its weight (Wizz 20 kg, Sky Express 15 kg,
   Aegean / Lufthansa 23 kg). Checked: Wizz round trip 527 ₪ without, 1,034 ₪ with (+507 tier).
 - Self-transfer / hidden-city / throw-away tickets are switched off in the filter.
+- Kiwi sells the same tickets above the airline / Google price (TLV→AMS El Al 4,335 ₪ vs 4,038 ₪ on Google, 2026-10-20),
+  and its prices move between calls. So for bag trips the bot uses Kiwi mainly as a **bag price list**: the cheapest
+  Kiwi bag fee for the same first outbound flight number is added to Google's fare. Kiwi's own total still competes.
 - **Fragile**: unofficial, no contract. Symptoms when it breaks: `kiwi failed: ...` lines, GraphQL `errors` in the
   message. The bot keeps working on Google alone, with "bag not in this price".

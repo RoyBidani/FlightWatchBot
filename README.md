@@ -180,6 +180,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 15 | Bug: "no offers" for a trip 2 months out | TLV→ATH in Dec said "no offers". From AWS, Google sometimes answers with a temporary error (status 13, ~1 in 6 calls) and sometimes lists one flight with no price; the bot read the first as "no flights" and crashed on the second. Now: retry on errors, only status 3 (dates not on sale) means "no flights", unpriced flights are skipped, and a failed source never produces a "no offers" message |
 | 16 | Buttons and design | Calendar date picker, tap-to-answer buttons, trip buttons in *My trips*, stop confirmation; every message redesigned with icons, bold dates and prices |
 | 17 | Real bag prices | Google's Bags filter turned out to be carry-on only (checked in a real browser). Tried Duffel (great data, but going live needs company details) and SerpApi booking pages (no checked-bag fees). Kiwi.com's own website API gives the total price **with** the bag and its weight, no key, works from AWS. TLV→ATH with a bag: 978 ₪, where Google's "cheapest" 543 ₪ had no bag |
+| 18 | Bag prices too high | TLV→AMS on Passover said 5,916 ₪: the bot let Kiwi's full price (Kiwi's markup + Kiwi's bag) beat Google's cheaper fare. Now Kiwi's bag fee for the same flight is added to Google's fare (4,038 + 484 = 4,522 ₪); Kiwi's own price still competes |
 
 ---
 
@@ -343,9 +344,9 @@ Type `/` in the chat to get the command menu (the bot registers it on startup).
 🛩 SWISS
 🕐 04:50 TLV → ZRH → 16:30 LAX
 ↔️ 1 stop in ZRH · 21h 40m
-🧳 Bag (23 kg) added: +544 ₪ (already in the price)
+🧳 Bag (23 kg): +544 ₪ (Kiwi.com's price for this flight), already in the price
 
-🔎 Open on Kiwi.com                   ← link to book this exact itinerary
+🔎 Open on Google Flights             ← link to the same search
 The price includes the return flight; you pick it on Google.
 ```
 
