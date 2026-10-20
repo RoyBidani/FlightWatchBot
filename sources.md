@@ -4,7 +4,7 @@ What was tried, when, and what came out of it. Update this file every time a sou
 
 | source | tier | status | date checked | quota / cost | notes |
 |---|---|---|---|---|---|
-| Google Flights via `fast-flights` (`sources/google.py`) | 2, browser-less unofficial | **ON, v1 primary** | 2026-10-19 | free, no key | TLV→LAX 10–20 Mar 2027, 1 stop, bag: 8 offers in ~1.2 s from a home IP. Fragile, see below |
+| Google Flights via `fast-flights` (`sources/google.py`) | 2, browser-less unofficial | **ON, v1 primary** | 2026-10-19 | free, no key | TLV→LAX 10–20 Mar 2027, 1 stop, bag: 8 offers in ~1.2 s from a home IP; 9 offers from AWS us-east-1 behind NAT (2026-10-20). Fragile, see below |
 | SerpApi Google Flights (`sources/serpapi.py`) | 1, paid API | built, off until `SERPAPI_KEY` is set | 2026-10-19 | free plan 250 searches/month, Starter $25 / 1,000 | Untested (no key yet). Checked bags not priced, offers come out as `bag_included=unknown` |
 | Amadeus Self-Service | 1, official | **DEAD** | 2026-10-19 | n/a | Self-service portal decommissioned and keys disabled on 2026-07-17. Only Enterprise (contract) remains. Not built |
 | Duffel | 1, official | not built | 2026-10-19 | self-serve live tokens; searches free up to 1,500 per booking, then $0.005 each | With zero bookings every search is "excess": ~240 searches/month per trip ≈ $1.20. Paid, so not without asking. Test mode is free but returns fake airlines |
@@ -25,8 +25,8 @@ What was tried, when, and what came out of it. Update this file every time a sou
 - Round trips: the itinerary is the outbound leg; the price is the round-trip total with the cheapest return.
 - `fast-flights` is pinned to 3.1.0 because `google.py` imports its query builder; the payload indexes are ours.
 - **Fragile**: breaks when Google changes the payload. Symptom: `google failed: no results script in page` or
-  `IndexError` / `TypeError` lines in the log. **Datacenter IPs**: untested from EC2 as of 2026-10-19. If EC2 gets a
-  consent/captcha page, set `SERPAPI_KEY` (same data, through SerpApi's IPs).
+  `IndexError` / `TypeError` lines in the log. **Datacenter IPs**: works from AWS us-east-1 (NAT gateway IP),
+  checked 2026-10-20. If it ever gets a consent/captcha page, set `SERPAPI_KEY` (same data, through SerpApi's IPs).
 
 ## SerpApi
 
