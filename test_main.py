@@ -29,6 +29,9 @@ assert "Tracking #1" in chat("yes")
 t = main.state["trips"][0]
 assert t["bag"] and t["ret"] is None and t["stops"] == 0 and main.PENDING.pop() == {"trip_id": 1}
 
+main.check_all(); main.check_all()
+assert len(sent) == 1 and "No matching offers" in sent[0], "empty first check announced once"
+sent.clear()
 prices[:] = [(3000, None), (3100, True), (2000, False)]
 main.check_all()
 assert t["current_low"]["price"] == 3100 and len(sent) == 1, "bag trip: known-bag beats unknown, no-bag excluded"

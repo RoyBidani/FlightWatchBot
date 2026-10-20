@@ -186,8 +186,10 @@ def evaluate(t, best, report):
     s = L[state["chats"][t["chat_id"]]["lang"]]
     cid, low = t["chat_id"], t["current_low"]
     if best is None:
-        if report:
-            send(cid, f"<b>{esc(title(t))}</b> #{t['id']}\nNo matching offers this run.")
+        if report or (low is None and not t.get("empty_announced")):
+            if send(cid, f"<b>{esc(title(t))}</b> #{t['id']}\nNo matching offers right now. Fares for far-off dates "
+                         "open about 11 months ahead; I keep checking and send the first price when it shows up."):
+                t["empty_announced"] = True
         return
     o = asdict(best) | {"found_at": now()}
     t["last_run_cheapest"] = {"price": best.price, "currency": best.currency, "source": best.source, "at": o["found_at"]}
