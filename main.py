@@ -74,9 +74,9 @@ L = {
                     "message you the moment a price shows up.",
            "fail": "⚠️ Couldn't reach Google Flights this time. I'll retry on the next check.",
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
-           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 See it on Google Flights",
+           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}",
            "rt_note": "<i>The price includes the return flight.</i>",
-           "yes": "🧳 Bag included", "added": "🧳 Bag added: +{fee} (already in the price)", "no": "🧳 Bag NOT included",
+           "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg} added: +{fee} (already in the price)", "no": "🧳 Bag NOT included",
            "unk": "🧳 Bag <b>not</b> in this price, add the fee before booking", "off": "🎒 No checked bag"},
     "he": {"first": "🎯 <b>התחלתי לעקוב!</b> המחיר הזול ביותר כרגע:", "new_low": "📉 <b>מחיר נמוך חדש!</b> (קודם {was})",
            "now": "🔎 <b>הזול ביותר כרגע</b> · הנמוך אי פעם {low} ({when})",
@@ -86,9 +86,9 @@ L = {
                     "אני ממשיך לבדוק ואשלח הודעה ברגע שיופיע מחיר.",
            "fail": "⚠️ לא הצלחתי להגיע ל-Google Flights הפעם. אנסה שוב בבדיקה הבאה.",
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
-           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לצפייה ב-Google Flights",
+           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
-           "yes": "🧳 מזוודה כלולה", "added": "🧳 מזוודה נוספה: +{fee} (כבר בתוך המחיר)", "no": "🧳 מזוודה לא כלולה",
+           "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg} נוספה: +{fee} (כבר בתוך המחיר)", "no": "🧳 מזוודה לא כלולה",
            "unk": "🧳 המזוודה <b>לא</b> כלולה במחיר, להוסיף את העלות לפני הזמנה", "off": "🎒 בלי מזוודה"},
 }
 
@@ -222,10 +222,10 @@ def format_offer(t, o, head):
         f"🛩 {esc(o['airline'])}",
         f"🕐 {esc(route)}",
         f"↔️ {esc(stops)} · {o['duration_min'] // 60}h {o['duration_min'] % 60:02d}m",
-        s["added"].format(fee=money(o["bag_fee"], o["currency"])) if bag == "yes" and o.get("bag_fee") else s[bag],
-        f"🏷 {esc(o['source'])}",
+        s["added" if o.get("bag_fee") else "yes"].format(fee=money(o["bag_fee"], o["currency"]), kg=f" ({o['bag_kg']} kg)" if o.get("bag_kg") else "")
+        if bag == "yes" else s[bag],
         "",
-        f'<a href="{esc(o["link"])}">{s["book"]}</a>',
+        f'<a href="{esc(o["link"])}">{s["book"].format(src=esc(o["source"]))}</a>',
         *([s["rt_note"]] if t["ret"] else []),
     ])
 
@@ -260,6 +260,8 @@ def evaluate(t, best, report, ok=True):
             if send(cid, f"{header(t, s)}\n\n{s['empty']}"):
                 t["empty_announced"] = True
         return
+    if low and t["bag"] and low.get("bag_included") is None and best.bag_included:
+        low = None
     o = asdict(best) | {"found_at": now()}
     t["last_run_cheapest"] = {"price": best.price, "currency": best.currency, "source": best.source, "at": o["found_at"]}
     if low is None or best.price <= low["price"] - max(t["min_drop"], low["price"] * t["min_drop_pct"] / 100):
@@ -275,7 +277,7 @@ def evaluate(t, best, report, ok=True):
         t["low_gone"] = True
         t["history"].append({"gone_at": o["found_at"], "cheapest_now": best.price, "source": best.source})
     if not t["plateau_announced"] and datetime.now(timezone.utc) - datetime.fromisoformat(low["found_at"]) >= timedelta(days=PLATEAU_DAYS):
-        if send(cid, f"{header(t, s)}\n\n" + s["plateau"].format(low=low_str, when=when) + f'\n\n<a href="{esc(low["link"])}">{s["book"]}</a>'):
+        if send(cid, f"{header(t, s)}\n\n" + s["plateau"].format(low=low_str, when=when) + f'\n\n<a href="{esc(low["link"])}">{s["book"].format(src=esc(low["source"]))}</a>'):
             t["plateau_announced"] = True
 
 

@@ -5,11 +5,11 @@ What was tried, when, and what came out of it. Update this file every time a sou
 | source | tier | status | date checked | quota / cost | notes |
 |---|---|---|---|---|---|
 | Google Flights via `fast-flights` (`sources/google.py`) | 2, browser-less unofficial | **ON, v1 primary** | 2026-10-19 | free, no key | TLV→LAX 10–20 Mar 2027, 1 stop, bag: 8 offers in ~1.2 s from a home IP; 9 offers from AWS us-east-1 behind NAT (2026-10-20). Fragile, see below |
-| SerpApi Google Flights (`sources/serpapi.py`) | 1, paid API | built, off until `SERPAPI_KEY` is set | 2026-10-19 | free plan 250 searches/month, Starter $25 / 1,000 | Untested (no key yet). Checked bags not priced, offers come out as `bag_included=unknown` |
+| SerpApi Google Flights (`sources/serpapi.py`) | 1, paid API | built, off until `SERPAPI_KEY` is set | 2026-10-20 | free plan 250 searches/month, Starter $25 / 1,000 | Same data as Google. Its booking options (`baggage_prices`) were tested for bag fees on TLV→ATH: Wizz none, El Al / Sky Express only "1 free carry-on". **No checked-bag fees**, so it doesn't solve bags |
 | Amadeus Self-Service | 1, official | **DEAD** | 2026-10-19 | n/a | Self-service portal decommissioned and keys disabled on 2026-07-17. Only Enterprise (contract) remains. Not built |
-| Duffel (`sources/duffel.py`) | 1, official | **ON when `DUFFEL_TOKEN` is set: the bag source** | 2026-10-20 | searches free up to 1,500 per booking, then $0.005 each: ~240/month per trip ≈ $1.20 | Real per-offer checked-bag allowance and bag prices. Test token works (49 offers TLV→ATH incl. El Al, Aegean, Arkia, Sky Express + fake "Duffel Airways"). Live mode needs account approval |
+| Duffel | 1, official | built, tested in test mode, **removed** | 2026-10-20 | searches free up to 1,500 per booking, then $0.005 each | Real per-fare bag allowance (El Al TLV→ATH 595 ₪ Lite vs 781 ₪ with bag). Live mode asks for company details we don't have, so it can't be used. Test mode also returns a fake "Duffel Airways" |
 | Travelpayouts / Aviasales Data API | 1, cached | not built | 2026-10-19 | free key | Cached prices, not live. No alerts from it; only worth adding as a trend/sanity check |
-| Kiwi.com public search | 2 | not built | 2026-10-19 | n/a | Official Tequila API is partner-only; the site's own endpoints are unofficial. Google already covers OTAs |
+| Kiwi.com website API (`sources/kiwi.py`) | 2, browser-less unofficial | **ON, the bag source** | 2026-10-20 | free, no key | Total price **with** the checked bag + bag weight per airline. Works from home and AWS without Kiwi's browser tokens. Fragile, see below |
 | Kayak / Skyscanner / Google page via Playwright | 3 | not built | 2026-10-19 | n/a | Bot-managed (PerimeterX / Akamai / Datadome). From EC2 these are blocked outright, same as Yad2 on GitHub Actions. Not worth fighting |
 
 ## Google Flights via fast-flights
@@ -24,7 +24,7 @@ What was tried, when, and what came out of it. Update this file every time a sou
   TLV→ATH, TLV→BUD, TLV→LHR: 23 itineraries, every price identical with and without (Wizz Air too). Google ignores it,
   so `google.py` no longer sends it and marks offers `bag_included=None` on bag trips; alerts say the bag is not in
   the price. Checked 2026-10-20 in a real browser: Google's Bags filter only offers carry-on (IL and US). Real bag
-  prices come from Duffel, below.
+  prices come from Kiwi, below.
 - **Error replies.** A `data:` payload ending in `errorHasStatus: true` starts with a status code: `3` = nothing on sale
   for these dates (e.g. > ~330 days out) → treated as no flights; `13` = temporary Google error, seen ~1 in 6 calls
   from AWS on 2026-10-20 → retried up to 3 times, then the source fails for this check.
@@ -42,18 +42,17 @@ What was tried, when, and what came out of it. Update this file every time a sou
   with a known bag over an unknown one, and says "unknown, verify before booking" when it has to use one.
 - 8 checks a day × 30 days = 240 searches per trip per month. The free plan covers exactly one trip.
 
-## Duffel
+## Kiwi.com
 
-- `POST /air/offer_requests?return_offers=true&supplier_timeout=15000`, header `Duffel-Version: v2`. One per trip per check.
-  Body: slices (one per direction), passengers `[{"type": "adult"}] * pax`, `cabin_class`, `max_connections`.
-- Bag included: every segment's `passengers[].baggages[]` has a `type: checked` entry with `quantity >= 1`.
-  Airlines return each fare family as its own offer, e.g. El Al TLV→ATH 595 ₪ Lite (no bag) vs 781 ₪ (bag included),
-  so the cheapest "with bag" offer is usually a bundled fare, not fare + fee.
-- Bag sold separately: `GET /air/offers/{id}?return_available_services=true`, `available_services[]` with
-  `type: baggage`, `metadata.type: checked`, `metadata.maximum_weight_kg`, `segment_ids`. The bot looks this up for the
-  5 cheapest offers without a bag and adds the cheapest 23 kg bag per segment group × passengers. Most LCC/Israeli
-  offers seen in test mode return no bag service, so they stay "bag unknown".
-- Prices come in the airline's currency (USD, EUR...); converted with frankfurter.dev daily rates.
-- Test mode returns real airline schedules plus a fake "Duffel Airways" (ZZ). **Never put a test token on the server**:
-  the fake airline would win and send real-looking alerts.
-- Live mode: dashboard "Go live", account details + payment method. Not done yet.
+- The site's own GraphQL API: `POST https://api.skypicker.com/umbrella/v2/graphql?featureName=SearchItinerariesQuery`.
+  Found by watching kiwi.com's network tab on 2026-10-20. The browser sends `kw-umbrella-token` / `kw-validation-token`
+  headers, but the API answers without them (from home and from AWS).
+- The website's query is 44 KB; `kiwi.py` sends a small one with only the fields it needs (price, bagsInfo, segments,
+  booking URL). Round trip: `returnItineraries` / `ItineraryReturn` / `outbound` + `inbound`; one way:
+  `onewayItineraries` / `ItineraryOneWay` / `sector`. Airports as `Station:airport:TLV`. Durations are in seconds.
+- `passengers.adultsHoldBags: [1]` makes `price.amount` the total **including** one checked bag per adult;
+  `bagsInfo.checkedBagTiers[0]` is that bag's share of the price and its weight (Wizz 20 kg, Sky Express 15 kg,
+  Aegean / Lufthansa 23 kg). Checked: Wizz round trip 527 ₪ without, 1,034 ₪ with (+507 tier).
+- Self-transfer / hidden-city / throw-away tickets are switched off in the filter.
+- **Fragile**: unofficial, no contract. Symptoms when it breaks: `kiwi failed: ...` lines, GraphQL `errors` in the
+  message. The bot keeps working on Google alone, with "bag not in this price".

@@ -50,8 +50,9 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
  └──────────────┼──────────────────────────────────────────────────────┘
                 │ HTTPS
                 ▼
-     Google Flights (www.google.com/travel/flights)
-     plain HTTP request with a Chrome fingerprint, no browser, no API key
+     Google Flights (www.google.com/travel/flights)     Kiwi.com (api.skypicker.com GraphQL)
+     cheapest fares, bag fee unknown                    total price with the checked bag
+     plain HTTP, no browser, no API key                 plain HTTP, no browser, no API key
 
  Admin access: AWS SSM (Session Manager / Run Command). No SSH, no open ports.
 ```
@@ -109,7 +110,7 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
 ### Every check, for every trip
 
 ```
- offers from Google ──► keep only: exact going date, stops ≤ allowed, same currency
+ offers from Google + Kiwi ──► keep only: exact going date, stops ≤ allowed, same currency
                                    │
                                    ▼
                           cheapest matching offer
@@ -139,7 +140,7 @@ FlightWatchBot/
 ├── sources/
 │   ├── __init__.py       Offer dataclass + list of enabled sources
 │   ├── google.py         Google Flights, no key: cheapest fares, bag fee unknown
-│   ├── duffel.py         Duffel airline API, DUFFEL_TOKEN: real checked-bag fares and bag prices
+│   ├── kiwi.py           Kiwi.com website API, no key: total price with the checked bag, bag weight
 │   └── serpapi.py        Google Flights through SerpApi, only if SERPAPI_KEY is set (backup)
 ├── sources.md            every price source we looked at: date, result, cost, quirks
 ├── test_main.py          self-check of the setup chat and price logic, no network needed
@@ -178,7 +179,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 14 | Managing trips | `/edit` to change dates, bag, stops or passengers of a trip; `/` command menu in Telegram |
 | 15 | Bug: "no offers" for a trip 2 months out | TLV→ATH in Dec said "no offers". From AWS, Google sometimes answers with a temporary error (status 13, ~1 in 6 calls) and sometimes lists one flight with no price; the bot read the first as "no flights" and crashed on the second. Now: retry on errors, only status 3 (dates not on sale) means "no flights", unpriced flights are skipped, and a failed source never produces a "no offers" message |
 | 16 | Buttons and design | Calendar date picker, tap-to-answer buttons, trip buttons in *My trips*, stop confirmation; every message redesigned with icons, bold dates and prices |
-| 17 | Real bag prices | Google's Bags filter turned out to be carry-on only. Added Duffel (an airline booking API) as a second source: it says per fare whether a 23 kg bag is included and can price one. TLV→ATH with a bag: 747 ₪ (Sky Express), where Google's "cheapest" 544 ₪ had no bag |
+| 17 | Real bag prices | Google's Bags filter turned out to be carry-on only (checked in a real browser). Tried Duffel (great data, but going live needs company details) and SerpApi booking pages (no checked-bag fees). Kiwi.com's own website API gives the total price **with** the bag and its weight, no key, works from AWS. TLV→ATH with a bag: 978 ₪, where Google's "cheapest" 543 ₪ had no bag |
 
 ---
 
@@ -278,7 +279,7 @@ To run the real bot locally put `TELEGRAM_BOT_TOKEN=...` in `.env` and run `./ve
 sudo git clone https://github.com/RoyBidani/FlightWatchBot.git /opt/flightbot
 sudo chown -R $USER /opt/flightbot && cd /opt/flightbot
 ./deploy/install.sh                       # first run creates /etc/flightbot.env and stops
-sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN, DUFFEL_TOKEN (live) for real bag prices
+sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN
 ./deploy/install.sh                       # venv, deps, systemd unit, enable + start
 ```
 
@@ -295,7 +296,9 @@ Open the bot, press **Start**. Everything is buttons; typing works too:
 2. **To**: tap one of the popular destinations, or type it
 3. **Going date**: tap a day in the calendar (‹ › switch months; days too close to today are greyed out `·`)
 4. **Return date**: tap a day (only days after the going date), or *One way*
-5. **Checked bag**: *Yes, with a bag* / *No bag*
+5. **Checked bag**: *Yes, with a bag* / *No bag*. With a bag, prices come from Kiwi.com with the airline's checked bag
+   already added (the alert shows its weight, 15–23 kg depending on the airline); if only Google has a price, the
+   alert says the bag is not in it
 6. **Direct only**: *Direct only* / *Connections OK* (up to 1 connection)
 7. A summary card, tap **Start tracking**
 
@@ -340,9 +343,9 @@ Type `/` in the chat to get the command menu (the bot registers it on startup).
 🛩 SWISS
 🕐 04:50 TLV → ZRH → 16:30 LAX
 ↔️ 1 stop in ZRH · 21h 40m
-🧳 Bag not in this price, add the fee before booking
+🧳 Bag (23 kg) added: +544 ₪ (already in the price)
 
-🔎 See it on Google Flights           ← link to the same search
+🔎 Open on Kiwi.com                   ← link to book this exact itinerary
 The price includes the return flight; you pick it on Google.
 ```
 
