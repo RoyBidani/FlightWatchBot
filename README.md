@@ -171,6 +171,8 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 10 | Telegram | Created @RoyFlightWatch_bot with BotFather, token into `/etc/flightbot.env`, service started |
 | 11 | First real trip | TLV→LAX, going Thu 9 Sep 2027, returning Fri 24 Sep 2027, bag, direct. Got 0 offers: airlines sell seats only **330 days ahead**, and the return date was not on sale yet (it opens around 29 Oct 2026). Changed the bot to say "no offers yet" once instead of staying silent |
 | 12 | Requests from use | Added "Direct flights only?" as a 5th setup question. Every message now shows "Going: Thu 9 Sep 2027 / Returning: Fri 24 Sep 2027" |
+| 13 | Live tests | First-price message, new-low alert (faked a higher low in `trips.json`), `/check`, `/status`, instance reboot: all passed |
+| 14 | Managing trips | `/edit` to change dates, bag, stops or passengers of a trip; `/` command menu in Telegram |
 
 ---
 
@@ -297,6 +299,7 @@ Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the question
 /new TLV LAX 2027-09-09 2027-09-24 bag pax=2 stops=0 cabin=business
 ```
 
+Type `/` in the chat to get the command menu (the bot registers it on startup).
 `stops=0` direct only, `stops=1` up to one connection, `stops=2` up to two. City names the bot knows are in
 `AIRPORTS` / `CITIES` in `main.py`; for anything else send the 3-letter airport code.
 
@@ -305,6 +308,7 @@ Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the question
 | `/new` | add a trip (questions, or the one-liner above) |
 | `/list` | your active trips with their current low |
 | `/status [id]` | lowest ever vs cheapest in the last check, days to departure |
+| `/edit <id> ...` | change a trip, e.g. `/edit 1 stops=1`, `/edit 1 go=2027-09-10 back=2027-09-24`, `/edit 1 nobag`, `back=none` = one way. Only what you write changes; the trip keeps its number but its price history restarts (new dates = different flight) |
 | `/stop <id>` | stop tracking a trip |
 | `/check` | check your trips now, reply with the cheapest per trip even if it is not a new low |
 | `/lang en` / `/lang he` | language of the price alerts (default English) |
@@ -387,9 +391,9 @@ Live checks on the running bot:
 | Google answers from AWS | `--dry-run --trip ...` on the instance | done, 9 offers |
 | Bot answers in Telegram | `/start`, 5 questions | done |
 | Clean restart, state kept | `systemctl restart`, trip still there | done |
-| First price message | a trip with dates on sale | next |
-| New-low alert | raise the recorded low in `trips.json`, send `/check` | next |
-| Survives reboot | `sudo reboot`, then `/status` | next |
+| First price message | a trip with dates on sale | done, 3,473 ₪ |
+| New-low alert | raise the recorded low in `trips.json`, restart or `/check` | done |
+| Survives reboot | reboot the instance, then `/status` | done, back in 25 s |
 | Two 3-hour checks | `journalctl -u flightbot \| grep 'check done'` | next |
 
 ---

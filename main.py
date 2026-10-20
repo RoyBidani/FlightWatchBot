@@ -54,8 +54,14 @@ ASK = {
     "direct": "Direct flights only? yes / no (no = up to 1 connection)",
 }
 USAGE = "Usage: <code>/new TLV LAX 2027-03-10 [2027-03-20] [bag] [pax=2] [stops=0] [cabin=business]</code>"
+EDIT_USAGE = ("Usage: <code>/edit 1 [go=2027-09-10] [back=2027-09-24|none] [bag|nobag] [stops=0] [pax=2] [cabin=economy]</code>"
+              "\nChange only what you write. back=none makes it one way.")
+CONFIRM = "\nStart tracking? yes / no"
+MENU = [("new", "Track a new trip"), ("list", "Your trips"), ("status", "Lowest ever vs cheapest now"),
+        ("check", "Check prices now"), ("edit", "Change a trip: /edit 1 stops=1"), ("stop", "Stop a trip: /stop 1"),
+        ("lang", "Alert language: /lang he or /lang en"), ("cancel", "Abort a setup"), ("help", "All commands")]
 HELP = ("/new start tracking a trip (asks 5 questions), or " + USAGE[7:] + "\n/list your trips\n"
-        "/status [id] lowest ever vs cheapest now\n/stop &lt;id&gt; stop tracking\n/check check prices now\n"
+        "/status [id] lowest ever vs cheapest now\n/edit &lt;id&gt; go=… back=… bag|nobag stops=… change a trip\n/stop &lt;id&gt; stop tracking\n/check check prices now\n"
         "/lang en|he alert language\n/cancel abort setup")
 L = {
     "en": {"first": "Tracking started. Cheapest right now:", "new_low": "New lowest price (was {was})",
@@ -274,21 +280,31 @@ def set_dates(t, text):
     t["out"], t["ret"] = ds[0].isoformat(), ds[1].isoformat() if len(ds) == 2 else None
 
 
-def parse_oneliner(arg):
-    t, pos = dict(DEFAULTS, bag=False, ret=None), []
+def parse_opts(t, arg):
+    pos = []
     for tok in arg.split():
         k, eq, v = tok.partition("=")
-        if eq:
-            if k == "cabin" and v in CABINS:
-                t[k] = v
-            elif k in ("pax", "stops") and v.isdigit() and int(v) <= (9 if k == "pax" else 2) and (k == "stops" or int(v) >= 1):
-                t[k] = int(v)
-            else:
-                return None, f"Bad option {esc(tok)}. " + USAGE
+        k = k.lower()
+        if eq and k == "cabin" and v in CABINS:
+            t[k] = v
+        elif eq and k in ("pax", "stops") and v.isdigit() and int(v) <= (9 if k == "pax" else 2) and (k == "stops" or int(v) >= 1):
+            t[k] = int(v)
+        elif eq and k in ("go", "back"):
+            t["out" if k == "go" else "ret"] = None if v.lower() == "none" else v
+        elif eq:
+            return None, f"Bad option {esc(tok)}."
         elif tok.lower() in ("bag", "nobag"):
             t["bag"] = tok.lower() == "bag"
         else:
             pos.append(tok)
+    return pos, None
+
+
+def parse_oneliner(arg):
+    t = dict(DEFAULTS, bag=False, ret=None)
+    pos, err = parse_opts(t, arg)
+    if err:
+        return None, err + " " + USAGE
     if len(pos) not in (3, 4):
         return None, USAGE
     t["origin"], t["dest"] = resolve(pos[0]), resolve(pos[1])
@@ -305,7 +321,6 @@ def summary(t):
         f"Checked bag: {'yes, 23 kg per passenger' if t['bag'] else 'no'}",
         f"{t['pax']} adult(s), {t['cabin']}, " + (f"max {t['stops']} stop(s)" if t["stops"] else "direct only") + f", {t['currency']}",
         f"Alert on a drop of at least {money(t['min_drop'], t['currency'])} or {t['min_drop_pct']}%",
-        "Start tracking? yes / no",
     ])
 
 
@@ -335,7 +350,7 @@ def setup_step(chat, cid, text):
     if step == "direct":
         t["stops"] = 0 if a in YES else DEFAULTS["stops"]
         s["step"] = "confirm"
-        return summary(t)
+        return summary(t) + CONFIRM
     chat["setup"] = None
     if a in NO:
         return "Cancelled. /new to start over."
@@ -374,7 +389,22 @@ def handle(msg):
         if err:
             return err
         chat["setup"] = {"step": "confirm", "trip": t}
-        return summary(t)
+        return summary(t) + CONFIRM
+    if cmd == "/edit":
+        tid, _, rest = arg.partition(" ")
+        t = next((t for t in mine if str(t["id"]) == tid.lstrip("#")), None)
+        if not t or not rest.strip():
+            return EDIT_USAGE
+        new = dict(t)
+        pos, err = parse_opts(new, rest)
+        err = err or (EDIT_USAGE if pos else set_dates(new, f"{new['out']} {new['ret'] or ''}"))
+        if err:
+            return err
+        t.update({k: new[k] for k in ("out", "ret", "bag", "stops", "pax", "cabin")}, current_low=None,
+                 last_run_cheapest=None, plateau_announced=False, low_gone=False, empty_announced=False)
+        t["history"].append({"edited_at": now(), "change": rest.strip()})
+        PENDING.append({"trip_id": t["id"]})
+        return f"Updated #{t['id']}, price tracking restarted:\n" + summary(t)
     if cmd in ("/start", "/help"):
         return HELP
     if cmd == "/cancel":
@@ -422,6 +452,11 @@ def daemon():
     if not TOKEN:
         sys.exit("TELEGRAM_BOT_TOKEN missing")
     signal.signal(signal.SIGTERM, on_term)
+    try:
+        requests.post(f"{API}/setMyCommands", timeout=30,
+                      json={"commands": [{"command": c, "description": d} for c, d in MENU]}).raise_for_status()
+    except Exception as e:
+        log.warning("setMyCommands failed: %s", str(e).replace(TOKEN, "***")[:200])
     log.info("flightbot up: %s active trips, sources: %s, state: %s",
              sum(t["active"] for t in state["trips"]), ", ".join(SOURCES) or "NONE", STATE_FILE)
     last, backoff = -INTERVAL, 5

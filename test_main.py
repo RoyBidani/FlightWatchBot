@@ -54,6 +54,15 @@ t["out"] = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
 main.check_all()
 assert not t["active"] and "stopped tracking #1" in sent[-1]
 
+t["active"] = True
+t["out"] = out
+assert "Usage" in chat("/edit 1") and "Usage" in chat("/edit 9 stops=1")
+assert "Bad option" in chat("/edit 1 foo=1") and "Return is before" in chat("/edit 1 back=2020-01-01")
+assert "price tracking restarted" in chat("/edit 1 stops=1 nobag back=" + out) and main.PENDING.pop() == {"trip_id": 1}
+assert t["stops"] == 1 and not t["bag"] and t["ret"] == out and t["current_low"] is None and "edited_at" in t["history"][-1]
+assert "one way" in chat("/edit 1 back=none") and t["ret"] is None
+main.PENDING.clear()
+t["active"] = False
 assert "Bad option" in chat("/new TLV LAX 2030-01-01 pax=0")
 assert "Start tracking" in chat(f"/new TLV JFK {out} {out} bag pax=2 stops=0")
 assert "Tracking #2" in chat("yes") and main.state["trips"][1]["pax"] == 2
