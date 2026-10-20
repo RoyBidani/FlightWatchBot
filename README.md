@@ -69,7 +69,7 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
    every 3 h passed?  ──► queue a full check ───┐       departure ≤ 3 days?  → stop it, say goodbye
    something queued?  ──► start check thread ───┼──►    ask every price source (Google today)
    getUpdates (wait up to 50 s for messages)    │       keep offers that match the trip
-   for each message:                            │       pick the cheapest
+   for each message or button tap:              │       pick the cheapest
      handle it (setup / command)                │       compare with the recorded low (below)
      save trips.json                            │       save trips.json
      reply instantly                            │     log "check done"
@@ -82,23 +82,25 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
 ### Adding a trip (the conversation)
 
 ```
- /start or /new
+ /start or /new                         (every question has buttons; typing also works)
       │
       ▼
- "Flying from?"      ── Tel Aviv / TLV ──►  resolved to TLV   (unknown name → "send the 3-letter code")
+ "Flying from?"   [Tel Aviv (TLV)]                         → TLV
       ▼
- "Flying to?"        ── LA / LAX ────────►  resolved to LAX
+ "Flying to?"     [Los Angeles] [New York] [London] ...    → LAX
       ▼
- "Dates?"            ── 2027-09-09 2027-09-24 ──► going + returning   (one date = one way)
+ "Going date?"    calendar  ‹ September 2027 ›             → Thu 9 Sep 2027
       ▼
- "Checked bag?"      ── yes / no
+ "Return date?"   calendar (only days after going) [One way]  → Fri 24 Sep 2027
       ▼
- "Direct only?"      ── yes (nonstop) / no (up to 1 connection)
+ "Checked bag?"   [Yes, with a bag] [No bag]
       ▼
- summary: Going Thu 9 Sep 2027, Returning Fri 24 Sep 2027, bag, direct...  "Start tracking?"
-      │ yes                                   │ no
-      ▼                                       ▼
- trip saved, first check runs now          cancelled
+ "Direct only?"   [Direct only] [Connections OK]
+      ▼
+ summary card     [Start tracking] [Cancel]
+      │
+      ▼
+ trip saved, first check runs now
 
  Shortcut: /new TLV LAX 2027-09-09 2027-09-24 bag stops=0 pax=2  → straight to the summary.
  The step you are on is saved in trips.json, so a restart in the middle loses nothing.
@@ -174,6 +176,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 13 | Live tests | First-price message, new-low alert (faked a higher low in `trips.json`), `/check`, `/status`, instance reboot: all passed |
 | 14 | Managing trips | `/edit` to change dates, bag, stops or passengers of a trip; `/` command menu in Telegram |
 | 15 | Bug: "no offers" for a trip 2 months out | TLV→ATH in Dec said "no offers". From AWS, Google sometimes answers with a temporary error (status 13, ~1 in 6 calls) and sometimes lists one flight with no price; the bot read the first as "no flights" and crashed on the second. Now: retry on errors, only status 3 (dates not on sale) means "no flights", unpriced flights are skipped, and a failed source never produces a "no offers" message |
+| 16 | Buttons and design | Calendar date picker, tap-to-answer buttons, trip buttons in *My trips*, stop confirmation; every message redesigned with icons, bold dates and prices |
 
 ---
 
@@ -284,30 +287,36 @@ sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN (and SERPAP
 
 ## Using the bot
 
-Open the bot, press **Start**. It asks five things, one at a time:
+Open the bot, press **Start**. Everything is buttons; typing works too:
 
-1. From where (`Tel Aviv` or `TLV`)
-2. To where (`Los Angeles`, `LA` or `LAX`)
-3. Dates: going and returning, `2027-09-09 2027-09-24`, or one date for one way (`9.9.2027` works too)
-4. Checked bag: `yes` or `no`. Google prices do **not** include a checked bag, so with `yes` every alert reminds you to
-   add the bag fee before booking (low-cost airlines like Wizz charge for it, El Al and most legacy fares include it)
-5. Direct flights only: `yes` (nonstop) or `no` (up to 1 connection)
+1. **From**: tap *Tel Aviv (TLV)*, or type any city / 3-letter code
+2. **To**: tap one of the popular destinations, or type it
+3. **Going date**: tap a day in the calendar (‹ › switch months; days too close to today are greyed out `·`)
+4. **Return date**: tap a day (only days after the going date), or *One way*
+5. **Checked bag**: *Yes, with a bag* / *No bag*
+6. **Direct only**: *Direct only* / *Connections OK* (up to 1 connection)
+7. A summary card, tap **Start tracking**
 
-It shows a summary, you answer `yes`, and the current cheapest price arrives within seconds
-(or "no offers yet" if the dates are not on sale yet).
-Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the questions:
+After each tap the question is updated with your answer (`→ Tue 29 Dec 2026`), so the chat reads as a clean record.
+The first price arrives within seconds (or "no matching offers yet" if the dates are not on sale yet).
+
+The main buttons **New trip · My trips · Check now** come with every menu message. **My trips** lists each trip with
+three buttons: **Status**, **Dates** (pick new dates in the calendar) and **Stop** (asks before stopping).
+
+Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the buttons:
 
 ```
 /new TLV LAX 2027-09-09 2027-09-24 bag pax=2 stops=0 cabin=business
 ```
 
-Type `/` in the chat to get the command menu (the bot registers it on startup).
 `stops=0` direct only, `stops=1` up to one connection, `stops=2` up to two. City names the bot knows are in
 `AIRPORTS` / `CITIES` in `main.py`; for anything else send the 3-letter airport code.
+Type `/` in the chat to get the command menu (the bot registers it on startup).
 
 | command | does |
 |---|---|
-| `/new` | add a trip (questions, or the one-liner above) |
+| `/new` | add a trip (buttons, or the one-liner above) |
+| `/dates <id>` | pick new dates for a trip in the calendar (same as the *Dates* button) |
 | `/list` | your active trips with their current low |
 | `/status [id]` | lowest ever vs cheapest in the last check, days to departure |
 | `/edit <id> ...` | change a trip, e.g. `/edit 1 stops=1`, `/edit 1 go=2027-09-10 back=2027-09-24`, `/edit 1 nobag`, `back=none` = one way. Only what you write changes; the trip keeps its number but its price history restarts (new dates = different flight) |
@@ -319,17 +328,20 @@ Type `/` in the chat to get the command menu (the bot registers it on startup).
 ### What an alert looks like
 
 ```
-TLV → LAX #1
-Going: Fri 20 Aug 2027
-Returning: Mon 30 Aug 2027
-New lowest price (was 6,890 ₪)
-6,673 ₪ round trip, 1 adult(s)
-El Al
-Going flight: TLV 01:05 → LAX 06:00, nonstop, 14h 55m
-Checked bag: NOT in this price, check the bag fee before booking
-Source: Google Flights
-Price includes the return flight; pick it on the booking page.
-Book / open search                ← link to the same search on Google Flights
+✈️ TLV → LAX  ·  #1
+🛫 Going  Fri 20 Aug 2027
+🛬 Return  Mon 30 Aug 2027
+
+📉 New lowest price! (was 3,640 ₪)
+💰 3,490 ₪  round trip · 1 adult
+
+🛩 SWISS
+🕐 04:50 TLV → ZRH → 16:30 LAX
+↔️ 1 stop in ZRH · 21h 40m
+🧳 Bag not in this price, add the fee before booking
+
+🔎 See it on Google Flights           ← link to the same search
+The price includes the return flight; you pick it on Google.
 ```
 
 Price rules, per trip in `trips.json`: `min_drop` (₪, default 50) and `min_drop_pct` (default 2).

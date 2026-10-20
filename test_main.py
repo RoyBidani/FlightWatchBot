@@ -13,18 +13,27 @@ main.SOURCES = {"fake": lambda t: [Offer(p, "ILS", "X", [["TLV", "LAX", t["out"]
 main.state = main.load()
 
 
-def chat(text):
-    return main.handle({"chat": {"id": 7}, "text": text})
+def chat(text, cid=7):
+    r = main.handle({"chat": {"id": cid}, "text": text})
+    return r[0] if isinstance(r, tuple) else r
+
+
+def tap(question, data):
+    reply, buttons = question
+    msg = {"chat": {"id": 7}, "message_id": 1, "text": reply, "reply_markup": {"inline_keyboard": buttons}}
+    r, edit = main.handle_callback({"id": "q", "message": msg, "data": data})
+    return r, edit
 
 
 out = (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d")
 assert "Flying from" in chat("/start")
 assert "code" in chat("Atlantis")
-assert "TLV" in chat("tel aviv") and "LAX" in chat("LA")
+assert "Flying to" in chat("tel aviv") and "Going date" in chat("LA")
 assert "Can't read" in chat("tomorrow")
-assert "bag" in chat(out).lower()
+assert "Returning" in chat(out)
+assert "bag" in chat("one way").lower()
 assert "Direct" in chat("yes")
-assert "direct only" in chat("yes")
+assert "Direct only" in chat("yes")
 assert "Tracking #1" in chat("yes")
 t = main.state["trips"][0]
 assert t["bag"] and t["ret"] is None and t["stops"] == 0 and main.PENDING.pop() == {"trip_id": 1}
@@ -55,8 +64,8 @@ t["current_low"]["found_at"] = (datetime.now(timezone.utc) - timedelta(days=15))
 main.check_all(); main.check_all()
 assert len(sent) == 3 and "Book it" in sent[-1]
 main.check_all(chat="7", report=True)
-assert "Cheapest now" in sent[-1] and "3,500" in sent[-1]
-assert "Lowest ever 3,038" in chat("/status")
+assert "Cheapest right now" in sent[-1] and "3,500" in sent[-1]
+assert "Lowest ever: <b>3,038" in chat("/status")
 t["out"] = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
 main.check_all()
 assert not t["active"] and "stopped tracking #1" in sent[-1]
@@ -64,17 +73,45 @@ assert not t["active"] and "stopped tracking #1" in sent[-1]
 t["active"] = True
 t["out"] = out
 assert "Usage" in chat("/edit 1") and "Usage" in chat("/edit 9 stops=1")
-assert "Bad option" in chat("/edit 1 foo=1") and "Return is before" in chat("/edit 1 back=2020-01-01")
+assert "Bad option" in chat("/edit 1 foo=1") and "before the going date" in chat("/edit 1 back=2020-01-01")
 assert "price tracking restarted" in chat("/edit 1 stops=1 nobag back=" + out) and main.PENDING.pop() == {"trip_id": 1}
 assert t["stops"] == 1 and not t["bag"] and t["ret"] == out and t["current_low"] is None and "edited_at" in t["history"][-1]
 assert "one way" in chat("/edit 1 back=none") and t["ret"] is None
 main.PENDING.clear()
 t["active"] = False
 assert "Bad option" in chat("/new TLV LAX 2030-01-01 pax=0")
-assert "Start tracking" in chat(f"/new TLV JFK {out} {out} bag pax=2 stops=0")
+assert "Your trip" in chat(f"/new TLV JFK {out} {out} bag pax=2 stops=0")
 assert "Tracking #2" in chat("yes") and main.state["trips"][1]["pax"] == 2
 assert "Stopped #2" in chat("/stop 2") and "No trips" in chat("/list")
 assert "Tracking #3" in chat(f"/new TLV LAX {out}") + chat("yes")
 other = lambda text: main.handle({"chat": {"id": 8}, "text": text})
 assert "No such" in other("/status 3") and "Usage" in other("/stop 3") and main.state["trips"][2]["active"]
+q = main.handle({"chat": {"id": 7}, "text": "/new"})
+r, edit = tap(q, "TLV")
+assert "Flying to" in r[0] and edit[1]["text"].endswith("→ Tel Aviv (TLV)")
+assert tap(q, "x") == (None, None)
+cal = main.handle({"chat": {"id": 7}, "text": "ATH"})[1]
+nav = cal[0][2]["callback_data"]
+_, edit = tap(("", cal), nav)
+assert edit[0] == "editMessageReplyMarkup"
+pick = next(b["callback_data"] for row in cal[2:] for b in row if b["callback_data"] != "x")
+r, edit = tap(("Going date?", cal), pick)
+assert "Returning" in r[0] and main.wday(pick) in edit[1]["text"]
+r, _ = tap(r, "one way")
+assert "bag" in r[0]
+main.state["chats"]["7"]["setup"] = None
+r = main.handle({"chat": {"id": 7}, "text": "/list"})
+assert any(b["callback_data"] == "/dates 3" for row in r[1] for b in row)
+r, _ = tap(r, "/stop 3 ?")
+assert "Stop tracking #3" in r[0] and main.state["trips"][2]["active"]
+r, _ = tap(main.handle({"chat": {"id": 7}, "text": "/list"}), "/dates 3")
+assert "New dates for #3" in r[0]
+go2 = (datetime.now() + timedelta(days=90)).strftime("%Y-%m-%d")
+r = main.handle({"chat": {"id": 7}, "text": go2})
+assert "Returning" in r[0]
+r = main.handle({"chat": {"id": 7}, "text": "one way"})
+assert "Save changes" in str(r[1])
+r = main.handle({"chat": {"id": 7}, "text": "yes"})
+assert "Updated #3" in r[0] and main.state["trips"][2]["out"] == go2 and main.state["trips"][2]["ret"] is None
+main.PENDING.clear()
 print("ok")
