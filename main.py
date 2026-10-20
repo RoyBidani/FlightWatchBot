@@ -62,18 +62,18 @@ L = {
            "now": "Cheapest now. Lowest ever {low} ({when})",
            "plateau": "No lower price for 14 days. Lowest seen: {low} ({when}). Book it.",
            "autostop": "Departure in {days} days, stopped tracking #{id}. Lowest seen: {low} ({when}).",
-           "rt": "round trip", "ow": "one way", "pax": "{n} adult(s)", "out": "Outbound", "nonstop": "nonstop",
+           "rt": "round trip", "ow": "one way", "pax": "{n} adult(s)", "out": "Going flight", "go": "Going", "back": "Returning", "nonstop": "nonstop",
            "stops": "{n} stop(s) via {via}", "src": "Source", "book": "Book / open search",
-           "rt_note": "Price is the round-trip total, pick the return on the booking page.",
+           "rt_note": "Price includes the return flight; pick it on the booking page.",
            "yes": "Checked bag: included in price", "no": "Checked bag: NOT included",
            "unk": "Checked bag: unknown, verify before booking", "off": "No checked bag (not requested)"},
     "he": {"first": "התחלתי לעקוב. המחיר הזול ביותר כרגע:", "new_low": "מחיר נמוך חדש (קודם {was})",
            "now": "הזול ביותר כרגע. הנמוך אי פעם {low} ({when})",
            "plateau": "אין מחיר נמוך יותר כבר 14 יום. הנמוך ביותר: {low} ({when}). להזמין.",
            "autostop": "ההמראה בעוד {days} ימים, הפסקתי לעקוב אחרי #{id}. הנמוך ביותר: {low} ({when}).",
-           "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "{n} מבוגרים", "out": "הלוך", "nonstop": "ישירה",
+           "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "{n} מבוגרים", "out": "טיסת הלוך", "go": "הלוך", "back": "חזור", "nonstop": "ישירה",
            "stops": "{n} עצירות דרך {via}", "src": "מקור", "book": "להזמנה / לחיפוש",
-           "rt_note": "המחיר כולל הלוך ושוב, את החזור בוחרים בדף ההזמנה.",
+           "rt_note": "המחיר כולל את טיסת החזור, בוחרים אותה בדף ההזמנה.",
            "yes": "מזוודה: כלולה במחיר", "no": "מזוודה: לא כלולה",
            "unk": "מזוודה: לא ידוע, לבדוק לפני הזמנה", "off": "בלי מזוודה (לא התבקש)"},
 }
@@ -139,8 +139,16 @@ def day(iso):
     return datetime.fromisoformat(iso).strftime("%-d %b %Y")
 
 
-def title(t):
-    return f"{t['origin']} → {t['dest']} · {day(t['out'])}" + (f" – {day(t['ret'])}" if t["ret"] else "")
+def wday(iso):
+    return datetime.fromisoformat(iso).strftime("%a %-d %b %Y")
+
+
+def dates(t, s=L["en"]):
+    return f"{s['go']}: {wday(t['out'])}\n" + (f"{s['back']}: {wday(t['ret'])}" if t["ret"] else s["ow"])
+
+
+def header(t, s=L["en"]):
+    return f"<b>{t['origin']} → {t['dest']}</b> #{t['id']}\n{dates(t, s)}"
 
 
 def format_offer(t, o, head):
@@ -153,7 +161,7 @@ def format_offer(t, o, head):
     stops = s["stops"].format(n=len(via), via=", ".join(via)) if via else s["nonstop"]
     bag = "off" if not t["bag"] else {True: "yes", False: "no", None: "unk"}[o["bag_included"]]
     return "\n".join([
-        f"<b>{esc(title(t))}</b> #{t['id']}",
+        header(t, s),
         esc(head),
         f"<b>{money(o['price'], o['currency'])}</b> {s['rt'] if t['ret'] else s['ow']}, {s['pax'].format(n=t['pax'])}",
         esc(o["airline"]),
@@ -187,7 +195,7 @@ def evaluate(t, best, report):
     cid, low = t["chat_id"], t["current_low"]
     if best is None:
         if report or (low is None and not t.get("empty_announced")):
-            if send(cid, f"<b>{esc(title(t))}</b> #{t['id']}\nNo matching offers right now. Fares for far-off dates "
+            if send(cid, f"{header(t, s)}\nNo matching offers right now. Fares for far-off dates "
                          "open about 11 months ahead; I keep checking and send the first price when it shows up."):
                 t["empty_announced"] = True
         return
@@ -206,7 +214,7 @@ def evaluate(t, best, report):
         t["low_gone"] = True
         t["history"].append({"gone_at": o["found_at"], "cheapest_now": best.price, "source": best.source})
     if not t["plateau_announced"] and datetime.now(timezone.utc) - datetime.fromisoformat(low["found_at"]) >= timedelta(days=PLATEAU_DAYS):
-        if send(cid, f"<b>{esc(title(t))}</b> #{t['id']}\n" + s["plateau"].format(low=low_str, when=when) + f'\n<a href="{esc(low["link"])}">{s["book"]}</a>'):
+        if send(cid, f"{header(t, s)}\n" + s["plateau"].format(low=low_str, when=when) + f'\n<a href="{esc(low["link"])}">{s["book"]}</a>'):
             t["plateau_announced"] = True
 
 
@@ -222,7 +230,7 @@ def check_all(chat=None, trip_id=None, report=False):
                     save()
                 low = t["current_low"]
                 s = L[state["chats"][t["chat_id"]]["lang"]]
-                send(t["chat_id"], f"<b>{esc(title(t))}</b> #{t['id']}\n" + s["autostop"].format(
+                send(t["chat_id"], f"{header(t, s)}\n" + s["autostop"].format(
                     days=days, id=t["id"], low=money(low["price"], low["currency"]) if low else "-",
                     when=day(low["found_at"]) if low else "-"))
                 continue
@@ -293,7 +301,7 @@ def parse_oneliner(arg):
 def summary(t):
     return "\n".join([
         f"{t['origin']} ({AIRPORTS.get(t['origin'], '?')}) → {t['dest']} ({AIRPORTS.get(t['dest'], '?')})",
-        f"{day(t['out'])}" + (f" – {day(t['ret'])}" if t["ret"] else " one-way"),
+        dates(t),
         f"Checked bag: {'yes, 23 kg per passenger' if t['bag'] else 'no'}",
         f"{t['pax']} adult(s), {t['cabin']}, " + (f"max {t['stops']} stop(s)" if t["stops"] else "direct only") + f", {t['currency']}",
         f"Alert on a drop of at least {money(t['min_drop'], t['currency'])} or {t['min_drop_pct']}%",
@@ -341,7 +349,7 @@ def setup_step(chat, cid, text):
 
 def status(t):
     low, last = t["current_low"], t["last_run_cheapest"]
-    lines = [f"<b>{esc(title(t))}</b> #{t['id']}"]
+    lines = [header(t)]
     if low:
         lines.append(f"Lowest ever {money(low['price'], low['currency'])} ({day(low['found_at'])}, {esc(low['airline'])}, {esc(low['source'])})")
     if last:
@@ -378,7 +386,7 @@ def handle(msg):
         chat["lang"] = arg
         return f"Alert language: {arg}"
     if cmd == "/list":
-        return "\n".join(f"#{t['id']} {esc(title(t))}" + (f" · low {money(t['current_low']['price'], t['currency'])}" if t["current_low"] else "")
+        return "\n".join(f"#{t['id']} {t['origin']} → {t['dest']}, going {day(t['out'])}" + (f", returning {day(t['ret'])}" if t["ret"] else ", one way") + (f" · low {money(t['current_low']['price'], t['currency'])}" if t["current_low"] else "")
                          for t in mine) or "No trips. /new to add one."
     if cmd == "/status":
         picked = [t for t in mine if not arg or str(t["id"]) == arg.lstrip("#")]
