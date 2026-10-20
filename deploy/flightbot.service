@@ -1,0 +1,18 @@
+[Unit]
+Description=FlightWatch Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=flightbot
+WorkingDirectory=/opt/flightbot
+EnvironmentFile=/etc/flightbot.env
+Environment=FLIGHTBOT_STATE=/var/lib/flightbot/trips.json PYTHONUNBUFFERED=1
+StateDirectory=flightbot
+ExecStart=/opt/flightbot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
