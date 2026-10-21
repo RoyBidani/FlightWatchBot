@@ -2,13 +2,14 @@
 
 A Telegram bot that watches the price of a flight and tells you when it finds a new lowest price.
 
-You add a trip in the chat (from, to, dates, checked bag, direct only). The bot checks Google Flights every 3 hours
+You add a trip in the chat (from, to, dates, checked bag, direct only). The bot checks Google Flights and Kiwi.com every 3 hours
 and messages you only when the price drops by at least 50 ₪ or 2%, whichever is larger. Any number of trips,
 any number of people: everyone who starts the bot gets their own trips.
 
 It was built for one trip, Tel Aviv → Los Angeles for a friend's wedding, but works for any route.
 Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
 
+- [Quick start](#quick-start)
 - [The big picture](#the-big-picture)
 - [How the bot thinks](#how-the-bot-thinks)
 - [What is in the repo](#what-is-in-the-repo)
@@ -19,6 +20,29 @@ Bot: [@RoyFlightWatch_bot](https://t.me/RoyFlightWatch_bot).
 - [Running and operating it](#running-and-operating-it)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick start
+
+Want your own copy? About 15 minutes, no paid services, no API keys except Telegram's.
+
+1. **Telegram bot**: in Telegram open [@BotFather](https://t.me/BotFather), send `/newbot`, copy the token.
+2. **A Linux machine that is always on**: any VPS, an AWS EC2 `t4g.nano`, a Raspberry Pi or a home server.
+   Ubuntu 24.04 (or anything with Python 3.10+ and systemd). It only needs outbound internet, no open ports.
+   AWS recipe: [AWS deployment](#aws-deployment).
+3. **Install** on that machine:
+   ```bash
+   sudo git clone https://github.com/RoyBidani/FlightWatchBot.git /opt/flightbot
+   sudo chown -R $USER /opt/flightbot && cd /opt/flightbot
+   ./deploy/install.sh                  # creates /etc/flightbot.env and stops
+   sudo nano /etc/flightbot.env         # TELEGRAM_BOT_TOKEN=<your token>
+   ./deploy/install.sh                  # starts the bot as a service
+   ```
+4. **Use it**: open your bot in Telegram, press **Start**, tap through the questions. The first price arrives in seconds.
+
+Check it is alive: `journalctl -u flightbot -f`. Try it on a laptop first without Telegram:
+`./venv/bin/python main.py --dry-run --trip "TLV ATH 2026-12-29 2027-01-05 bag"`.
 
 ---
 
@@ -409,7 +433,7 @@ Live checks on the running bot:
 | check | how | status |
 |---|---|---|
 | Google answers from AWS | `--dry-run --trip ...` on the instance | done, 9 offers |
-| Bot answers in Telegram | `/start`, 5 questions | done |
+| Bot answers in Telegram | `/start`, buttons and calendar | done |
 | Clean restart, state kept | `systemctl restart`, trip still there | done |
 | First price message | a trip with dates on sale | done, 3,473 ₪ |
 | New-low alert | raise the recorded low in `trips.json`, restart or `/check` | done |
