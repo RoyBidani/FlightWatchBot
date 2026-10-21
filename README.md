@@ -414,7 +414,7 @@ Live checks on the running bot:
 | First price message | a trip with dates on sale | done, 3,473 ₪ |
 | New-low alert | raise the recorded low in `trips.json`, restart or `/check` | done |
 | Survives reboot | reboot the instance, then `/status` | done, back in 25 s |
-| Two 3-hour checks | `journalctl -u flightbot \| grep 'check done'` | next |
+| Two 3-hour checks | `journalctl -u flightbot \| grep 'check done'` | done, 8 in a row exactly 3 h apart (Oct 20–21), surviving Telegram 429 / 502 / timeouts |
 
 ---
 
@@ -434,3 +434,4 @@ Live checks on the running bot:
 | `telegram <id> -> 403` | that user blocked the bot. Their trips stay in `trips.json`; `/stop` them or ignore |
 | no `check done:` for > 3 hours | service down: `systemctl status flightbot`, `journalctl -u flightbot -n 50` |
 | bot answers but alerts never come | prices did not drop enough. `/check` shows the current cheapest |
+| `stopped` + `flightbot up` around 06:00–07:00 UTC, no deploy | Ubuntu's automatic security updates restarted the service. Normal; a check runs right after |
