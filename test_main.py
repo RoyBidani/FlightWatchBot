@@ -52,6 +52,7 @@ sent.clear()
 prices[:] = [(3000, None), (3100, True), (2000, False)]
 main.check_all()
 assert t["current_low"]["price"] == 3100 and len(sent) == 1, "bag trip: known-bag beats unknown, no-bag excluded"
+assert "Cheaper fare: <b>3,000 ₪</b>" in sent[-1], "cheaper bag-unknown fare shown; the known no-bag fare is not"
 prices[:] = [(3060, True)]
 main.check_all()
 assert len(sent) == 1, "drop of 40 is under max(50, 2%)"
@@ -109,7 +110,7 @@ r, _ = tap(r, "one way")
 assert "bag" in r[0]
 main.state["chats"]["7"]["setup"] = None
 r = main.handle({"chat": {"id": 7}, "text": "/list"})
-assert any(b["callback_data"] == "/dates 3" for row in r[1] for b in row)
+assert any(b["callback_data"] == "/dates 3" and "LAX" in b["text"] for row in r[1] for b in row)
 r, _ = tap(r, "/stop 3 ?")
 assert "Stop tracking #3" in r[0] and main.state["trips"][2]["active"]
 r, _ = tap(main.handle({"chat": {"id": 7}, "text": "/list"}), "/dates 3")

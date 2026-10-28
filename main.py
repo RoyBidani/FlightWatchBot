@@ -78,6 +78,7 @@ L = {
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
            "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}",
            "rt_note": "<i>The price includes the return flight.</i>",
+           "alt": "💡 Cheaper fare: <b>{price}</b> on <a href=\"{link}\">{src}</a>, bag not confirmed, check before booking",
            "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg}: +{fee}, already in the price", "no": "🧳 Bag NOT included",
            "unk": "🧳 Bag <b>not</b> in this price, add the fee before booking", "off": "🎒 No checked bag"},
     "he": {"first": "🎯 <b>התחלתי לעקוב!</b> המחיר הזול ביותר כרגע:", "new_low": "📉 <b>מחיר נמוך חדש!</b> (קודם {was})",
@@ -91,6 +92,7 @@ L = {
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
            "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
+           "alt": "💡 מחיר זול יותר: <b>{price}</b> ב-<a href=\"{link}\">{src}</a>, המזוודה לא מאושרת, לבדוק לפני הזמנה",
            "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg}: +{fee}, כבר בתוך המחיר", "no": "🧳 מזוודה לא כלולה",
            "unk": "🧳 המזוודה <b>לא</b> כלולה במחיר, להוסיף את העלות לפני הזמנה", "off": "🎒 בלי מזוודה"},
 }
@@ -235,6 +237,8 @@ def format_offer(t, o, head):
         f"↔️ {esc(stops)} · {o['duration_min'] // 60}h {o['duration_min'] % 60:02d}m",
         s["added" if o.get("bag_fee") else "yes"].format(fee=money(o["bag_fee"], o["currency"]), kg=f" ({o['bag_kg']} kg)" if o.get("bag_kg") else "")
         if bag == "yes" else s[bag],
+        *([s["alt"].format(price=money(o["alt"]["price"], o["currency"]), src=esc(o["alt"]["source"]), link=esc(o["alt"]["link"]))]
+          if o.get("alt") else []),
         "",
         f'<a href="{esc(o["link"])}">{s["book"].format(src=esc(o["source"]))}</a>',
         *([s["rt_note"]] if t["ret"] else []),
@@ -258,7 +262,11 @@ def cheapest(t):
             log.warning("trip %s %s failed: %s", t["id"], name, (str(e).splitlines() or [repr(e)])[0][:200])
     if t["bag"]:
         add_bag_prices(offers)
-    return min(offers, key=lambda o: (t["bag"] and o.bag_included is None, o.price), default=None), ok
+    best = min(offers, key=lambda o: (t["bag"] and o.bag_included is None, o.price), default=None)
+    cheapest_any = min(offers, key=lambda o: o.price, default=None)
+    if best and cheapest_any.price < best.price:
+        best.alt = {"price": cheapest_any.price, "source": cheapest_any.source, "link": cheapest_any.link}
+    return best, ok
 
 
 def add_bag_prices(offers):
@@ -554,8 +562,8 @@ def handle(msg):
         lines = [f"✈️ <b>#{t['id']} {t['origin']} → {t['dest']}</b>\n     {datetime.fromisoformat(t['out']):%-d %b}"
                  + (f" → {datetime.fromisoformat(t['ret']):%-d %b %Y}" if t["ret"] else f" {t['out'][:4]}, one way")
                  + (f" · low <b>{money(t['current_low']['price'], t['currency'])}</b>" if t["current_low"] else " · no price yet") for t in mine]
-        return "🗂 <b>Your trips</b>\n\n" + "\n\n".join(lines), kb(*[[(f"#{t['id']} Status", f"/status {t['id']}"), (f"#{t['id']} Dates", f"/dates {t['id']}"),
-                                       (f"#{t['id']} Stop", f"/stop {t['id']} ?")] for t in mine])
+        return "🗂 <b>Your trips</b>\n\n" + "\n\n".join(lines), kb(*[[(f"#{t['id']} {t['dest']} · Status", f"/status {t['id']}"),
+                                       (f"#{t['id']} {t['dest']} · Dates", f"/dates {t['id']}"), (f"#{t['id']} {t['dest']} · Stop", f"/stop {t['id']} ?")] for t in mine])
     if cmd == "/status":
         shown = [picked] if picked else [] if arg else mine
         return "\n\n".join(status(t) for t in shown) or "No such trip. /list"

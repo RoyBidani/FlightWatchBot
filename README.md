@@ -208,6 +208,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 17 | Real bag prices | Google's Bags filter turned out to be carry-on only (checked in a real browser). Tried Duffel (great data, but going live needs company details) and SerpApi booking pages (no checked-bag fees). Kiwi.com's own website API gives the total price **with** the bag and its weight, no key, works from AWS. TLV→ATH with a bag: 978 ₪, where Google's "cheapest" 543 ₪ had no bag |
 | 18 | Bag prices too high | TLV→AMS on Passover said 5,916 ₪: the bot let Kiwi's full price (Kiwi's markup + Kiwi's bag) beat Google's cheaper fare. Now Kiwi's bag fee for the same flight is added to Google's fare (4,038 + 484 = 4,522 ₪); Kiwi's own price still competes |
 | 19 | Flexible dates | A shared Google link for TLV→AMS was ~1,000 ₪ cheaper than the bot: same flights, one day earlier out and later back, around Passover. Added "Can your dates move?" (±1–3 days): Google gets one request per date pair, Kiwi one range request. The AMS trip dropped from 4,243 ₪ to 3,256 ₪ with a bag |
+| 20 | Hidden cheaper fare | TLV→LAX said 8,757 ₪ (Kiwi, bag included) while Google had the same El Al flights at 6,212 ₪ with the bag unknown. Alerts now add "💡 Cheaper fare: … bag not confirmed" whenever a fare below the bag-included price exists. *My trips* buttons show the destination (`#1 LAX · Dates`) |
 
 ---
 
@@ -336,7 +337,9 @@ After each tap the question is updated with your answer (`→ Tue 29 Dec 2026`),
 The first price arrives within seconds (or "no matching offers yet" if the dates are not on sale yet).
 
 The main buttons **New trip · My trips · Check now** come with every menu message. **My trips** lists each trip with
-three buttons: **Status**, **Dates** (pick new dates in the calendar) and **Stop** (asks before stopping).
+three buttons labelled with its destination: **#1 LAX · Status**, **· Dates** (pick new dates in the calendar) and
+**· Stop** (asks before stopping). With a bag, if a cheaper fare exists whose bag Google can't confirm, the alert adds a
+`💡 Cheaper fare` line with its link.
 
 Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the buttons:
 

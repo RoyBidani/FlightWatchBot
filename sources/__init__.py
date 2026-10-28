@@ -20,6 +20,7 @@ class Offer:
     bag_fee: float = 0
     bag_kg: int = 0
     ret_date: str = ""
+    alt: dict | None = None
     fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
