@@ -67,3 +67,16 @@ What was tried, when, and what came out of it. Update this file every time a sou
   Kiwi bag fee for the same first outbound flight number is added to Google's fare. Kiwi's own total still competes.
 - **Fragile**: unofficial, no contract. Symptoms when it breaks: `kiwi failed: ...` lines, GraphQL `errors` in the
   message. The bot keeps working on Google alone, with "bag not in this price".
+
+## Ideas tested and dropped (2026-10-28)
+
+- **Travel-agency prices from Google's booking page via a headless browser.** A plain headless Chromium loads the page
+  but Google returns only part of the seller list to an automated browser (2 sellers vs 5+ in a normal one). Getting the
+  full list means hiding the automation from Google's bot detection, which this project does not do. The alert links
+  to the booking page instead, so the agencies are one tap away. Legit way to get them automatically: SerpApi's
+  booking options (paid above the free 250 searches/month).
+- **Two one-way tickets instead of a round trip.** Google's round-trip search already mixes airlines and separate
+  tickets: TLV→AMS ±1 stop RT 1,548 ₪ = TAROM + LOT one-ways 1,548 ₪; TLV→LHR saved 83 ₪; TLV→LAX and TLV→BKK the
+  one-ways were 600–1,400 ₪ *more*. Not worth the extra requests.
+- **Whole-city search** (Google city id `/m/030qb3t` for Los Angeles): returned the same LAX-only results; from TLV the
+  other LA airports have no useful connections. Dropped.
