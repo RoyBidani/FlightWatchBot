@@ -145,4 +145,16 @@ assert "(1 day earlier)" in txt and "(2 days later)" in txt, txt
 assert "±1" in main.dates(ft) and "Flexible ±1 day (9 date combinations)" in main.summary(ft)
 r = main.handle({"chat": {"id": 7}, "text": f"/new TLV AMS {out} {base['ret']} flex=2"})
 assert "Flexible ±2 days" in r[0]
+import sources.serpapi as sp
+calls = []
+sp.cheapest_seller = lambda t, o: calls.append(1) or ("lastminute.co.il", 2556)
+os.environ["SERPAPI_KEY"] = "x"
+at = dict(main.DEFAULTS, id=7, origin="TLV", dest="AMS", out="2027-04-14", ret="2027-04-25", bag=True)
+ao = Offer(3290, "ILS", "El Al", [["TLV", "AMS", "2027-04-14 16:10", "2027-04-14 20:15", "LY339"]], 0, 305, True, "Google Flights", "g", bag_fee=482, ret_date="2027-04-25")
+main.apply_agency(at, ao)
+assert (ao.price, ao.seller) == (3038, "lastminute.co.il"), "agency fare + same bag fee"
+ao2 = Offer(3290, "ILS", "El Al", ao.segments, 0, 305, True, "Google Flights", "g", bag_fee=482, ret_date="2027-04-25")
+main.apply_agency(at, ao2)
+assert len(calls) == 1 and ao2.price == 3038, "cached for the day, no second SerpApi call"
+del os.environ["SERPAPI_KEY"]
 print("ok")

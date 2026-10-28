@@ -167,7 +167,7 @@ FlightWatchBot/
 │   ├── __init__.py       Offer dataclass + list of enabled sources
 │   ├── google.py         Google Flights, no key: cheapest fares, bag fee unknown
 │   ├── kiwi.py           Kiwi.com website API, no key: total price with the checked bag, bag weight
-│   └── serpapi.py        Google Flights through SerpApi, only if SERPAPI_KEY is set (backup)
+│   └── serpapi.py        optional, SERPAPI_KEY: daily check of Google's seller list (travel agencies)
 ├── sources.md            every price source we looked at: date, result, cost, quirks
 ├── test_main.py          self-check of the setup chat and price logic, no network needed
 ├── deploy/
@@ -210,6 +210,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 19 | Flexible dates | A shared Google link for TLV→AMS was ~1,000 ₪ cheaper than the bot: same flights, one day earlier out and later back, around Passover. Added "Can your dates move?" (±1–3 days): Google gets one request per date pair, Kiwi one range request. The AMS trip dropped from 4,243 ₪ to 3,256 ₪ with a bag |
 | 20 | Hidden cheaper fare | TLV→LAX said 8,757 ₪ (Kiwi, bag included) while Google had the same El Al flights at 6,212 ₪ with the bag unknown. Alerts now add "💡 Cheaper fare: … bag not confirmed" whenever a fare below the bag-included price exists. *My trips* buttons show the destination (`#1 LAX · Dates`) |
 | 21 | Travel agencies cheaper | Same El Al flights: El Al 2,802 ₪, lastminute.co.il 2,556 ₪, only visible on Google's booking page. That page's seller list needs Google's anti-bot token (browser only). The bot now builds the booking-page link itself (both flights pre-selected, format decoded from a shared Google link), so one tap shows every seller |
+| 22 | "Search everywhere" | Tested a headless browser for Google's agency list (stopped: needs hiding the automation from Google's bot detection), two one-way tickets (no saving, Google already mixes airlines), whole-city airports (no gain). Added a daily SerpApi check of Google's seller list (free plan); it sometimes finds a cheaper agency. Biggest real saving found: allowing 1 connection (TLV→AMS 1,548 ₪ vs 2,808 direct) |
 
 ---
 
@@ -309,7 +310,7 @@ To run the real bot locally put `TELEGRAM_BOT_TOKEN=...` in `.env` and run `./ve
 sudo git clone https://github.com/RoyBidani/FlightWatchBot.git /opt/flightbot
 sudo chown -R $USER /opt/flightbot && cd /opt/flightbot
 ./deploy/install.sh                       # first run creates /etc/flightbot.env and stops
-sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN
+sudo nano /etc/flightbot.env              # paste TELEGRAM_BOT_TOKEN (+ optional SERPAPI_KEY, free plan, for agency prices)
 ./deploy/install.sh                       # venv, deps, systemd unit, enable + start
 ```
 
@@ -461,7 +462,8 @@ Live checks on the running bot:
 | `getUpdates failed: ... retry in 60s` repeating | no network / DNS. Check outbound 443 (security group, NAT) |
 | `google failed: no results script in page (consent/captcha?)` | Google refused this IP or changed the page. Set `SERPAPI_KEY`; see [sources.md](sources.md) |
 | `google failed: IndexError ...` / `TypeError ...` | Google changed the page data layout. Update `sources/google.py` |
-| `source serpapi disabled: SERPAPI_KEY not set` | expected without a key |
+| `daily travel-agency check disabled: SERPAPI_KEY not set` | expected without a key |
+| `trip N agencies failed: serpapi: ... run out of searches` | SerpApi free plan used up for the month; airline prices keep working |
 | `trip N google: 0 offers` | dates more than ~330 days out (not on sale yet), or rules too strict (direct only). Wait, or try `stops=1` |
 | `trip N google failed: google error status 13 three times in a row` | Google had a temporary problem; no message is sent, the next check retries |
 | `telegram <id> -> 403` | that user blocked the bot. Their trips stay in `trips.json`; `/stop` them or ignore |

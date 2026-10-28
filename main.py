@@ -76,7 +76,7 @@ L = {
            "fail": "⚠️ Couldn't reach Google Flights this time. I'll retry on the next check.",
            "shift": "({n} day{s} {dir})", "earlier": "earlier", "later": "later",
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
-           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}", "sellers": "🔎 All sellers on Google Flights (travel agencies are often cheaper)",
+           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}", "sellers": "🔎 All sellers on Google Flights (travel agencies are often cheaper)", "seller": "🏪 Cheapest seller: <b>{seller}</b>",
            "rt_note": "<i>The price includes the return flight.</i>",
            "alt": "💡 Cheaper fare: <b>{price}</b> on <a href=\"{link}\">{src}</a>, bag not confirmed, check before booking",
            "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg}: +{fee}, already in the price", "no": "🧳 Bag NOT included",
@@ -90,7 +90,7 @@ L = {
            "fail": "⚠️ לא הצלחתי להגיע ל-Google Flights הפעם. אנסה שוב בבדיקה הבאה.",
            "shift": "({n} ימים {dir})", "earlier": "מוקדם יותר", "later": "מאוחר יותר",
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
-           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}", "sellers": "🔎 כל המוכרים ב-Google Flights (סוכנויות לרוב זולות יותר)",
+           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}", "sellers": "🔎 כל המוכרים ב-Google Flights (סוכנויות לרוב זולות יותר)", "seller": "🏪 המוכר הזול ביותר: <b>{seller}</b>",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
            "alt": "💡 מחיר זול יותר: <b>{price}</b> ב-<a href=\"{link}\">{src}</a>, המזוודה לא מאושרת, לבדוק לפני הזמנה",
            "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg}: +{fee}, כבר בתוך המחיר", "no": "🧳 מזוודה לא כלולה",
@@ -233,6 +233,7 @@ def format_offer(t, o, head):
         f"💰 <b>{money(o['price'], o['currency'])}</b>  {s['rt'] if t['ret'] else s['ow']} · {s['pax' if t['pax'] == 1 else 'paxs'].format(n=t['pax'])}",
         "",
         f"🛩 {esc(o['airline'])}",
+        *([s["seller"].format(seller=esc(o["seller"]))] if o.get("seller") and o["seller"] not in o["airline"] else []),
         f"🕐 {esc(route)}",
         f"↔️ {esc(stops)} · {o['duration_min'] // 60}h {o['duration_min'] % 60:02d}m",
         s["added" if o.get("bag_fee") else "yes"].format(fee=money(o["bag_fee"], o["currency"]), kg=f" ({o['bag_kg']} kg)" if o.get("bag_kg") else "")
@@ -270,9 +271,30 @@ def cheapest(t):
             best.link = google.booking_link(t, best)
         except Exception as e:
             log.warning("trip %s booking link failed: %s", t["id"], str(e)[:200])
+    if best and best.source == "Google Flights" and os.getenv("SERPAPI_KEY"):
+        apply_agency(t, best)
     if best and cheapest_any.price < best.price:
         best.alt = {"price": cheapest_any.price, "source": cheapest_any.source, "link": cheapest_any.link}
     return best, ok
+
+
+def apply_agency(t, best):
+    key, today = [s[4] for s in best.segments] + [best.ret_date], date.today().isoformat()
+    a = t.get("agency") or {}
+    if a.get("key") != key or a.get("day") != today:
+        try:
+            from sources import serpapi
+            seller, price = serpapi.cheapest_seller(t, best)
+            log.info("trip %s agencies: %s %s", t["id"], seller, price)
+        except Exception as e:
+            seller = price = None
+            log.warning("trip %s agencies failed: %s", t["id"], str(e)[:200])
+        a = {"key": key, "day": today, "seller": seller, "price": price}
+        with LOCK:
+            t["agency"] = a
+    # ponytail: agency price refreshed once a day per flight (SerpApi free plan); in between the cached price is reused
+    if a.get("price") and a["price"] < best.price - best.bag_fee:
+        best.price, best.seller = a["price"] + best.bag_fee, a["seller"]
 
 
 def add_bag_prices(offers):

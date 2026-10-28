@@ -21,6 +21,7 @@ class Offer:
     bag_kg: int = 0
     ret_date: str = ""
     alt: dict | None = None
+    seller: str = ""
     fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
@@ -50,8 +51,5 @@ except ImportError as e:
 from . import kiwi
 SOURCES["kiwi"] = kiwi.search
 
-if os.getenv("SERPAPI_KEY"):
-    from . import serpapi
-    SOURCES["serpapi"] = serpapi.search
-else:
-    log.warning("source serpapi disabled: SERPAPI_KEY not set")
+if not os.getenv("SERPAPI_KEY"):
+    log.warning("daily travel-agency check disabled: SERPAPI_KEY not set")
