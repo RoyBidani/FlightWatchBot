@@ -209,6 +209,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 18 | Bag prices too high | TLV→AMS on Passover said 5,916 ₪: the bot let Kiwi's full price (Kiwi's markup + Kiwi's bag) beat Google's cheaper fare. Now Kiwi's bag fee for the same flight is added to Google's fare (4,038 + 484 = 4,522 ₪); Kiwi's own price still competes |
 | 19 | Flexible dates | A shared Google link for TLV→AMS was ~1,000 ₪ cheaper than the bot: same flights, one day earlier out and later back, around Passover. Added "Can your dates move?" (±1–3 days): Google gets one request per date pair, Kiwi one range request. The AMS trip dropped from 4,243 ₪ to 3,256 ₪ with a bag |
 | 20 | Hidden cheaper fare | TLV→LAX said 8,757 ₪ (Kiwi, bag included) while Google had the same El Al flights at 6,212 ₪ with the bag unknown. Alerts now add "💡 Cheaper fare: … bag not confirmed" whenever a fare below the bag-included price exists. *My trips* buttons show the destination (`#1 LAX · Dates`) |
+| 21 | Travel agencies cheaper | Same El Al flights: El Al 2,802 ₪, lastminute.co.il 2,556 ₪, only visible on Google's booking page. That page's seller list needs Google's anti-bot token (browser only). The bot now builds the booking-page link itself (both flights pre-selected, format decoded from a shared Google link), so one tap shows every seller |
 
 ---
 

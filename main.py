@@ -76,7 +76,7 @@ L = {
            "fail": "⚠️ Couldn't reach Google Flights this time. I'll retry on the next check.",
            "shift": "({n} day{s} {dir})", "earlier": "earlier", "later": "later",
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
-           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}",
+           "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}", "sellers": "🔎 All sellers on Google Flights (travel agencies are often cheaper)",
            "rt_note": "<i>The price includes the return flight.</i>",
            "alt": "💡 Cheaper fare: <b>{price}</b> on <a href=\"{link}\">{src}</a>, bag not confirmed, check before booking",
            "yes": "🧳 Bag included{kg}", "added": "🧳 Bag{kg}: +{fee}, already in the price", "no": "🧳 Bag NOT included",
@@ -90,7 +90,7 @@ L = {
            "fail": "⚠️ לא הצלחתי להגיע ל-Google Flights הפעם. אנסה שוב בבדיקה הבאה.",
            "shift": "({n} ימים {dir})", "earlier": "מוקדם יותר", "later": "מאוחר יותר",
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
-           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}",
+           "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}", "sellers": "🔎 כל המוכרים ב-Google Flights (סוכנויות לרוב זולות יותר)",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
            "alt": "💡 מחיר זול יותר: <b>{price}</b> ב-<a href=\"{link}\">{src}</a>, המזוודה לא מאושרת, לבדוק לפני הזמנה",
            "yes": "🧳 מזוודה כלולה{kg}", "added": "🧳 מזוודה{kg}: +{fee}, כבר בתוך המחיר", "no": "🧳 מזוודה לא כלולה",
@@ -240,7 +240,7 @@ def format_offer(t, o, head):
         *([s["alt"].format(price=money(o["alt"]["price"], o["currency"]), src=esc(o["alt"]["source"]), link=esc(o["alt"]["link"]))]
           if o.get("alt") else []),
         "",
-        f'<a href="{esc(o["link"])}">{s["book"].format(src=esc(o["source"]))}</a>',
+        f'<a href="{esc(o["link"])}">{s["sellers"] if "/booking?" in o["link"] else s["book"].format(src=esc(o["source"]))}</a>',
         *([s["rt_note"]] if t["ret"] else []),
     ])
 
@@ -264,6 +264,12 @@ def cheapest(t):
         add_bag_prices(offers)
     best = min(offers, key=lambda o: (t["bag"] and o.bag_included is None, o.price), default=None)
     cheapest_any = min(offers, key=lambda o: o.price, default=None)
+    if best and best.source == "Google Flights":
+        try:
+            from sources import google
+            best.link = google.booking_link(t, best)
+        except Exception as e:
+            log.warning("trip %s booking link failed: %s", t["id"], str(e)[:200])
     if best and cheapest_any.price < best.price:
         best.alt = {"price": cheapest_any.price, "source": cheapest_any.source, "link": cheapest_any.link}
     return best, ok

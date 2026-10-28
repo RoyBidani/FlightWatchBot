@@ -28,6 +28,12 @@ What was tried, when, and what came out of it. Update this file every time a sou
 - **Error replies.** A `data:` payload ending in `errorHasStatus: true` starts with a status code: `3` = nothing on sale
   for these dates (e.g. > ~330 days out) → treated as no flights; `13` = temporary Google error, seen ~1 in 6 calls
   from AWS on 2026-10-20 → retried up to 3 times, then the source fails for this check.
+- **Booking page / sellers.** Google's results show the airline's price; travel agencies on the booking page are often
+  cheaper (TLV→AMS El Al 2,802 ₪ vs lastminute.co.il 2,556 ₪, 2026-10-28). The sellers come from
+  `FlightsFrontendService/GetBookingResults`, which answers `[13]` without the browser's `x-goog-batchexecute-bgr`
+  (BotGuard) token, so the bot can't read them. It builds the booking URL instead: in `tfs`, each leg (field 3) gets
+  field 4 per segment = `{1: from, 2: date, 3: to, 5: airline, 6: number}`. With only the outbound picked, the normal
+  search answer lists the return flights; the cheapest one is picked for the link.
 - **Unpriced itineraries.** From AWS Google sometimes lists a flight with an empty price block (`k[1] == []`). Skipped.
 - Round trips: the itinerary is the outbound leg; the price is the round-trip total with the cheapest return.
 - Flexible dates: one request per going / return pair (±1 = 9, ±3 = 49), ~1 s each. TLV→AMS ±1: 7.6 s for both sources.
