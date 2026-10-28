@@ -1,7 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 log = logging.getLogger("flightbot")
 
@@ -19,7 +19,23 @@ class Offer:
     link: str
     bag_fee: float = 0
     bag_kg: int = 0
+    ret_date: str = ""
     fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+
+def date_pairs(trip):
+    flex, out = trip.get("flex", 0), date.fromisoformat(trip["out"])
+    ret = date.fromisoformat(trip["ret"]) if trip["ret"] else None
+    for i in range(-flex, flex + 1):
+        o = out + timedelta(days=i)
+        if o <= date.today():
+            continue
+        if ret is None:
+            yield o.isoformat(), None
+            continue
+        for j in range(-flex, flex + 1):
+            if ret + timedelta(days=j) >= o:
+                yield o.isoformat(), (ret + timedelta(days=j)).isoformat()
 
 
 SOURCES = {}

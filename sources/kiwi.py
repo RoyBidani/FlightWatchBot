@@ -1,5 +1,7 @@
 import requests
 
+from datetime import date, timedelta
+
 from . import Offer
 
 URL = "https://api.skypicker.com/umbrella/v2/graphql?featureName=SearchItinerariesQuery"
@@ -24,15 +26,17 @@ def search(trip):
     rt = bool(trip["ret"])
     query = QUERY.format(input="SearchReturnInput" if rt else "SearchOnewayInput", root="returnItineraries" if rt else "onewayItineraries",
                          kind="ItineraryReturn" if rt else "ItineraryOneWay", legs=f"outbound {LEG} inbound {LEG}" if rt else f"sector {LEG}")
+    flex = timedelta(days=trip.get("flex", 0))
+    window = lambda d: {"start": f"{date.fromisoformat(d) - flex}T00:00:00", "end": f"{date.fromisoformat(d) + flex}T23:59:59"}
     itinerary = {"source": {"ids": [f"Station:airport:{trip['origin']}"]}, "destination": {"ids": [f"Station:airport:{trip['dest']}"]},
-                 "outboundDepartureDate": {"start": f"{trip['out']}T00:00:00", "end": f"{trip['out']}T23:59:59"}}
+                 "outboundDepartureDate": window(trip["out"])}
     if rt:
-        itinerary["inboundDepartureDate"] = {"start": f"{trip['ret']}T00:00:00", "end": f"{trip['ret']}T23:59:59"}
+        itinerary["inboundDepartureDate"] = window(trip["ret"])
     variables = {
         "search": {"itinerary": itinerary, "cabinClass": {"cabinClass": CABINS[trip["cabin"]], "applyMixedClasses": False},
                    "passengers": {"adults": trip["pax"], "children": 0, "infants": 0, "adultsHoldBags": [int(trip["bag"])] * trip["pax"],
                                   "adultsHandBags": [0] * trip["pax"], "childrenHoldBags": [], "childrenHandBags": []}},
-        "filter": {"maxStopsCount": trip["stops"], "transportTypes": ["FLIGHT"], "contentProviders": ["KIWI", "FRESH"], "limit": 20,
+        "filter": {"maxStopsCount": trip["stops"], "transportTypes": ["FLIGHT"], "contentProviders": ["KIWI", "FRESH"], "limit": 40,
                    "enableSelfTransfer": False, "enableThrowAwayTicketing": False, "enableTrueHiddenCity": False},
         "options": {"currency": trip["currency"].lower(), "locale": "en", "partner": "skypicker", "sortBy": "PRICE",
                     "sortOrder": "ASCENDING", "mergePriceDiffRule": "INCREASED", "serverToken": None, "searchSessionId": None}}
@@ -56,5 +60,6 @@ def search(trip):
             bag_included=bool(tiers) if trip["bag"] else False,
             bag_fee=round(float(tiers[0]["tierPrice"]["amount"])) if tiers else 0,
             bag_kg=tiers[0]["bags"][0]["weight"]["value"] if tiers else 0,
+            ret_date=it["inbound"]["sectorSegments"][0]["segment"]["source"]["localTime"][:10] if rt else "",
             source="Kiwi.com", link="https://www.kiwi.com" + ((it["bookingOptions"]["edges"] or [{"node": {"bookingUrl": "/en/"}}])[0]["node"]["bookingUrl"])))
     return offers

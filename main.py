@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("flightbot")
 logging.getLogger("primp").setLevel(logging.WARNING)
 
-from sources import SOURCES
+from sources import SOURCES, date_pairs
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 API = f"https://api.telegram.org/bot{TOKEN}"
@@ -29,7 +29,7 @@ STATE_FILE = Path(os.getenv("FLIGHTBOT_STATE", "trips.json"))
 INTERVAL = 3 * 3600
 PLATEAU_DAYS = 14
 AUTOSTOP_DAYS = 3
-DEFAULTS = {"pax": 1, "stops": 1, "cabin": "economy", "currency": "ILS", "min_drop": 50, "min_drop_pct": 2}
+DEFAULTS = {"pax": 1, "stops": 1, "cabin": "economy", "currency": "ILS", "min_drop": 50, "min_drop_pct": 2, "flex": 0}
 CABINS = ("economy", "premium-economy", "business", "first")
 SYMBOLS = {"ILS": "₪", "USD": "$", "EUR": "€"}
 YES, NO = {"yes", "y", "כן"}, {"no", "n", "לא"}
@@ -54,8 +54,9 @@ ASK = {
     "back": "Returning date? Tap a day, or One way.",
     "bag": "Taking a checked bag (23 kg)?",
     "direct": "Direct flights only?",
+    "flex": "Can your dates move? I'll check every going / return combination in the range and send the cheapest.",
 }
-NEXT = {"from": "to", "to": "go", "go": "back", "back": "bag", "bag": "direct", "direct": "confirm"}
+NEXT = {"from": "to", "to": "go", "go": "back", "back": "bag", "bag": "direct", "direct": "flex", "flex": "confirm"}
 USAGE = "Usage: <code>/new TLV LAX 2027-03-10 [2027-03-20] [bag] [pax=2] [stops=0] [cabin=business]</code>"
 EDIT_USAGE = ("Usage: <code>/edit 1 [go=2027-09-10] [back=2027-09-24|none] [bag|nobag] [stops=0] [pax=2] [cabin=economy]</code>"
               "\nChange only what you write. back=none makes it one way.")
@@ -73,6 +74,7 @@ L = {
            "empty": "⏳ <b>No matching offers yet.</b>\nAirlines open sales about 11 months ahead. I keep checking and "
                     "message you the moment a price shows up.",
            "fail": "⚠️ Couldn't reach Google Flights this time. I'll retry on the next check.",
+           "shift": "({n} day{s} {dir})", "earlier": "earlier", "later": "later",
            "rt": "round trip", "ow": "one way", "pax": "{n} adult", "paxs": "{n} adults", "go": "Going", "back": "Return",
            "nonstop": "Nonstop", "stops": "{n} stop in {via}", "stopss": "{n} stops in {via}", "book": "🔎 Open on {src}",
            "rt_note": "<i>The price includes the return flight.</i>",
@@ -85,6 +87,7 @@ L = {
            "empty": "⏳ <b>עדיין אין טיסות למכירה בתאריכים האלה.</b>\nחברות התעופה פותחות מכירה כ-11 חודשים מראש. "
                     "אני ממשיך לבדוק ואשלח הודעה ברגע שיופיע מחיר.",
            "fail": "⚠️ לא הצלחתי להגיע ל-Google Flights הפעם. אנסה שוב בבדיקה הבאה.",
+           "shift": "({n} ימים {dir})", "earlier": "מוקדם יותר", "later": "מאוחר יותר",
            "rt": "הלוך ושוב", "ow": "כיוון אחד", "pax": "נוסע {n}", "paxs": "{n} נוסעים", "go": "הלוך", "back": "חזור",
            "nonstop": "טיסה ישירה", "stops": "עצירה {n} ב-{via}", "stopss": "{n} עצירות ב-{via}", "book": "🔎 לפתוח ב-{src}",
            "rt_note": "<i>המחיר כולל את טיסת החזור.</i>",
@@ -196,12 +199,20 @@ def wday(iso):
     return datetime.fromisoformat(iso).strftime("%a %-d %b %Y")
 
 
-def dates(t, s=L["en"]):
-    return f"🛫 {s['go']}  <b>{wday(t['out'])}</b>\n" + (f"🛬 {s['back']}  <b>{wday(t['ret'])}</b>" if t["ret"] else f"↪️ {s['ow']}")
+def shift(d, base, s):
+    n = (date.fromisoformat(d) - date.fromisoformat(base)).days
+    return "" if not n else " " + s["shift"].format(n=abs(n), s="s" if abs(n) > 1 else "", dir=s["earlier" if n < 0 else "later"])
 
 
-def header(t, s=L["en"]):
-    return f"✈️ <b>{t['origin']} → {t['dest']}</b>  ·  #{t['id']}\n{dates(t, s)}"
+def dates(t, s=L["en"], o=None):
+    out, ret = (o["segments"][0][2][:10], o.get("ret_date", t["ret"]) or None) if o else (t["out"], t["ret"])
+    flex = "" if o or not t.get("flex") else f"  (±{t['flex']})"
+    return (f"🛫 {s['go']}  <b>{wday(out)}</b>{shift(out, t['out'], s)}{flex}\n"
+            + (f"🛬 {s['back']}  <b>{wday(ret)}</b>{shift(ret, t['ret'], s) if t['ret'] else ''}{flex}" if ret else f"↪️ {s['ow']}"))
+
+
+def header(t, s=L["en"], o=None):
+    return f"✈️ <b>{t['origin']} → {t['dest']}</b>  ·  #{t['id']}\n{dates(t, s, o)}"
 
 
 def format_offer(t, o, head):
@@ -214,7 +225,7 @@ def format_offer(t, o, head):
     stops = s["stops" if len(via) == 1 else "stopss"].format(n=len(via), via=", ".join(via)) if via else s["nonstop"]
     bag = "off" if not t["bag"] else {True: "yes", False: "no", None: "unk"}[o["bag_included"]]
     return "\n".join([
-        header(t, s),
+        header(t, s, o),
         "",
         head,
         f"💰 <b>{money(o['price'], o['currency'])}</b>  {s['rt'] if t['ret'] else s['ow']} · {s['pax' if t['pax'] == 1 else 'paxs'].format(n=t['pax'])}",
@@ -231,7 +242,7 @@ def format_offer(t, o, head):
 
 
 def matches(t, o):
-    return (o.stops <= t["stops"] and bool(o.segments) and o.segments[0][2][:10] == t["out"]
+    return (o.stops <= t["stops"] and bool(o.segments) and (o.segments[0][2][:10], o.ret_date or None) in set(date_pairs(t))
             and o.currency == t["currency"] and not (t["bag"] and o.bag_included is False))
 
 
@@ -301,7 +312,7 @@ def check_all(chat=None, trip_id=None, report=False):
         trips = [t for t in state["trips"] if t["active"] and chat in (None, t["chat_id"]) and trip_id in (None, t["id"])]
     for t in trips:
         try:
-            days = (date.fromisoformat(t["out"]) - date.today()).days
+            days = (date.fromisoformat(t["out"]) - date.today()).days - t.get("flex", 0)
             if days <= AUTOSTOP_DAYS:
                 with LOCK:
                     t["active"] = False
@@ -359,7 +370,7 @@ def parse_opts(t, arg):
         k = k.lower()
         if eq and k == "cabin" and v in CABINS:
             t[k] = v
-        elif eq and k in ("pax", "stops") and v.isdigit() and int(v) <= (9 if k == "pax" else 2) and (k == "stops" or int(v) >= 1):
+        elif eq and k in ("pax", "stops", "flex") and v.isdigit() and int(v) <= {"pax": 9, "stops": 2, "flex": 3}[k] and (k != "pax" or int(v) >= 1):
             t[k] = int(v)
         elif eq and k in ("go", "back"):
             t["out" if k == "go" else "ret"] = None if v.lower() == "none" else v
@@ -391,7 +402,9 @@ def summary(t):
         "📝 <b>Your trip</b>",
         f"✈️ {t['origin']} {AIRPORTS.get(t['origin'], '')} → {t['dest']} {AIRPORTS.get(t['dest'], '')}",
         dates(t),
-        "🧳 Checked bag (fee not in Google's prices)" if t["bag"] else "🎒 No checked bag",
+        "🧳 Checked bag, its price included" if t["bag"] else "🎒 No checked bag",
+        "📅 " + (f"Flexible ±{t['flex']} day{'s' if t['flex'] > 1 else ''} ({len(list(date_pairs(t)))} date combinations)"
+                if t.get("flex") else "Exact dates"),
         "↔️ " + ("Direct only" if not t["stops"] else f"Up to {t['stops']} connection{'s' if t['stops'] > 1 else ''}"),
         f"👤 {t['pax']} adult{'s' if t['pax'] > 1 else ''} · {t['cabin']} · {t['currency']}",
         f"🔔 Alerts on drops of {money(t['min_drop'], t['currency'])} or {t['min_drop_pct']}%+",
@@ -414,11 +427,12 @@ def ask(s, prefix=""):
     if step in ("go", "back"):
         return prefix + ASK[step], date_picker(s)
     return prefix + ASK[step], {"from": FROM_KB, "to": TO_KB, "bag": kb([("Yes, with a bag", "yes"), ("No bag", "no")]),
-                                "direct": kb([("Direct only", "yes"), ("Connections OK", "no")])}[step]
+                                "direct": kb([("Direct only", "yes"), ("Connections OK", "no")]),
+                                "flex": kb([("Exact dates", "0"), ("±1 day", "1")], [("±2 days", "2"), ("±3 days", "3")])}[step]
 
 
 def apply_edit(t, new, change):
-    t.update({k: new[k] for k in ("out", "ret", "bag", "stops", "pax", "cabin")}, current_low=None,
+    t.update({k: new.get(k, DEFAULTS.get(k)) for k in ("out", "ret", "bag", "stops", "pax", "cabin", "flex")}, current_low=None,
              last_run_cheapest=None, plateau_announced=False, low_gone=False, empty_announced=False)
     t["history"].append({"edited_at": now(), "change": change})
     PENDING.append({"trip_id": t["id"]})
@@ -450,6 +464,11 @@ def setup_step(chat, cid, text):
             return ask(s, err + "\n")
         if s.get("edit"):
             nxt = "confirm"
+    elif step == "flex":
+        n = "0" if "exact" in a else next((c for c in a if c.isdigit()), None)
+        if n not in ("0", "1", "2", "3"):
+            return ask(s, "Tap one of the buttons.\n")
+        t["flex"] = int(n)
     elif a not in YES | NO:
         return ask(s, "Tap a button, or answer yes / no.\n")
     elif step == "bag":
@@ -478,7 +497,9 @@ def status(t):
     low, last = t["current_low"], t["last_run_cheapest"]
     lines = [header(t), ""]
     if low:
-        lines.append(f"🏆 Lowest ever: <b>{money(low['price'], low['currency'])}</b> · {day(low['found_at'])} · {esc(low['airline'])}")
+        when = f" · {datetime.fromisoformat(low['segments'][0][2][:10]):%-d %b}" + (
+            f" → {datetime.fromisoformat(low['ret_date']):%-d %b}" if low.get("ret_date") else "") if t.get("flex") else ""
+        lines.append(f"🏆 Lowest ever: <b>{money(low['price'], low['currency'])}</b>{when} · found {day(low['found_at'])} · {esc(low['airline'])}")
     if last:
         at = datetime.fromisoformat(last["at"]).astimezone(ZoneInfo("Asia/Jerusalem")).strftime("%-d %b %H:%M")
         lines.append(f"🔎 Cheapest now: {money(last['price'], last['currency'])} · checked {at}")

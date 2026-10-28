@@ -30,6 +30,7 @@ What was tried, when, and what came out of it. Update this file every time a sou
   from AWS on 2026-10-20 → retried up to 3 times, then the source fails for this check.
 - **Unpriced itineraries.** From AWS Google sometimes lists a flight with an empty price block (`k[1] == []`). Skipped.
 - Round trips: the itinerary is the outbound leg; the price is the round-trip total with the cheapest return.
+- Flexible dates: one request per going / return pair (±1 = 9, ±3 = 49), ~1 s each. TLV→AMS ±1: 7.6 s for both sources.
 - `fast-flights` is pinned to 3.1.0 because `google.py` imports its query builder; the payload indexes are ours.
 - **Fragile**: breaks when Google changes the payload. Symptom: `google failed: no results script in page` or
   `IndexError` / `TypeError` lines in the log. **Datacenter IPs**: works from AWS us-east-1 (NAT gateway IP),
@@ -54,6 +55,7 @@ What was tried, when, and what came out of it. Update this file every time a sou
   `bagsInfo.checkedBagTiers[0]` is that bag's share of the price and its weight (Wizz 20 kg, Sky Express 15 kg,
   Aegean / Lufthansa 23 kg). Checked: Wizz round trip 527 ₪ without, 1,034 ₪ with (+507 tier).
 - Self-transfer / hidden-city / throw-away tickets are switched off in the filter.
+- Flexible dates: `outboundDepartureDate` / `inboundDepartureDate` take a `start`–`end` window, so ±N days is one request.
 - Kiwi sells the same tickets above the airline / Google price (TLV→AMS El Al 4,335 ₪ vs 4,038 ₪ on Google, 2026-10-20),
   and its prices move between calls. So for bag trips the bot uses Kiwi mainly as a **bag price list**: the cheapest
   Kiwi bag fee for the same first outbound flight number is added to Google's fare. Kiwi's own total still competes.

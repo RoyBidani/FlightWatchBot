@@ -5,7 +5,7 @@ from fast_flights import FlightQuery, Passengers, create_query
 from primp import Client
 from selectolax.lexbor import LexborHTMLParser
 
-from . import Offer
+from . import Offer, date_pairs
 
 URL = "https://www.google.com/travel/flights"
 
@@ -20,10 +20,23 @@ def ymd(d):
 
 
 def search(trip):
-    legs = [FlightQuery(date=trip["out"], from_airport=trip["origin"], to_airport=trip["dest"])]
-    if trip["ret"]:
-        legs.append(FlightQuery(date=trip["ret"], from_airport=trip["dest"], to_airport=trip["origin"]))
-    q = create_query(flights=legs, trip="round-trip" if trip["ret"] else "one-way", seat=trip["cabin"],
+    offers, errors, pairs = [], [], list(date_pairs(trip))
+    # ponytail: one Google request per date pair, ±3 days = 49 requests per check; a range query if Google ever minds
+    for out, ret in pairs:
+        try:
+            offers += search_dates(trip, out, ret)
+        except Exception as e:
+            errors.append(e)
+    if errors and len(errors) == len(pairs):
+        raise errors[0]
+    return offers
+
+
+def search_dates(trip, out, ret):
+    legs = [FlightQuery(date=out, from_airport=trip["origin"], to_airport=trip["dest"])]
+    if ret:
+        legs.append(FlightQuery(date=ret, from_airport=trip["dest"], to_airport=trip["origin"]))
+    q = create_query(flights=legs, trip="round-trip" if ret else "one-way", seat=trip["cabin"],
                      passengers=Passengers(adults=trip["pax"]), max_stops=trip["stops"],
                      currency=trip["currency"], language="en")
     for attempt in range(3):
@@ -52,5 +65,5 @@ def search(trip):
                 segments=[[s[3], s[6], f"{ymd(s[20])} {hhmm(s[8])}", f"{ymd(s[21])} {hhmm(s[10])}",
                            f"{s[22][0]}{s[22][1]}"] for s in f[2]],
                 stops=len(f[2]) - 1, duration_min=f[9], bag_included=None if trip["bag"] else False,
-                source="Google Flights", link=q.url()))
+                source="Google Flights", link=q.url(), ret_date=ret or ""))
     return offers

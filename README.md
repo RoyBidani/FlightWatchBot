@@ -122,6 +122,8 @@ Check it is alive: `journalctl -u flightbot -f`. Try it on a laptop first withou
       ▼
  "Direct only?"   [Direct only] [Connections OK]
       ▼
+ "Dates move?"    [Exact dates] [±1 day] [±2 days] [±3 days]
+      ▼
  summary card     [Start tracking] [Cancel]
       │
       ▼
@@ -205,6 +207,7 @@ The bot follows the patterns of an earlier project, [Yad2SearchBot](https://gith
 | 16 | Buttons and design | Calendar date picker, tap-to-answer buttons, trip buttons in *My trips*, stop confirmation; every message redesigned with icons, bold dates and prices |
 | 17 | Real bag prices | Google's Bags filter turned out to be carry-on only (checked in a real browser). Tried Duffel (great data, but going live needs company details) and SerpApi booking pages (no checked-bag fees). Kiwi.com's own website API gives the total price **with** the bag and its weight, no key, works from AWS. TLV→ATH with a bag: 978 ₪, where Google's "cheapest" 543 ₪ had no bag |
 | 18 | Bag prices too high | TLV→AMS on Passover said 5,916 ₪: the bot let Kiwi's full price (Kiwi's markup + Kiwi's bag) beat Google's cheaper fare. Now Kiwi's bag fee for the same flight is added to Google's fare (4,038 + 484 = 4,522 ₪); Kiwi's own price still competes |
+| 19 | Flexible dates | A shared Google link for TLV→AMS was ~1,000 ₪ cheaper than the bot: same flights, one day earlier out and later back, around Passover. Added "Can your dates move?" (±1–3 days): Google gets one request per date pair, Kiwi one range request. The AMS trip dropped from 4,243 ₪ to 3,256 ₪ with a bag |
 
 ---
 
@@ -325,7 +328,9 @@ Open the bot, press **Start**. Everything is buttons; typing works too:
    already added (the alert shows its weight, 15–23 kg depending on the airline); if only Google has a price, the
    alert says the bag is not in it
 6. **Direct only**: *Direct only* / *Connections OK* (up to 1 connection)
-7. A summary card, tap **Start tracking**
+7. **Flexible dates**: *Exact dates* / *±1 day* / *±2 days* / *±3 days*. With ±1 the bot checks all 9 going / return
+   combinations (±3 = 49) and sends the cheapest, marked e.g. `Going Wed 14 Apr 2027 (1 day earlier)`
+8. A summary card, tap **Start tracking**
 
 After each tap the question is updated with your answer (`→ Tue 29 Dec 2026`), so the chat reads as a clean record.
 The first price arrives within seconds (or "no matching offers yet" if the dates are not on sale yet).
@@ -336,10 +341,10 @@ three buttons: **Status**, **Dates** (pick new dates in the calendar) and **Stop
 Defaults: 1 adult, economy, max 1 connection, ILS. Power users skip the buttons:
 
 ```
-/new TLV LAX 2027-09-09 2027-09-24 bag pax=2 stops=0 cabin=business
+/new TLV LAX 2027-09-09 2027-09-24 bag pax=2 stops=0 flex=1 cabin=business
 ```
 
-`stops=0` direct only, `stops=1` up to one connection, `stops=2` up to two. City names the bot knows are in
+`flex=0..3` flexible dates (± days), `stops=0` direct only, `stops=1` up to one connection, `stops=2` up to two. City names the bot knows are in
 `AIRPORTS` / `CITIES` in `main.py`; for anything else send the 3-letter airport code.
 Type `/` in the chat to get the command menu (the bot registers it on startup).
 
@@ -349,7 +354,7 @@ Type `/` in the chat to get the command menu (the bot registers it on startup).
 | `/dates <id>` | pick new dates for a trip in the calendar (same as the *Dates* button) |
 | `/list` | your active trips with their current low |
 | `/status [id]` | lowest ever vs cheapest in the last check, days to departure |
-| `/edit <id> ...` | change a trip, e.g. `/edit 1 stops=1`, `/edit 1 go=2027-09-10 back=2027-09-24`, `/edit 1 nobag`, `back=none` = one way. Only what you write changes; the trip keeps its number but its price history restarts (new dates = different flight) |
+| `/edit <id> ...` | change a trip, e.g. `/edit 1 stops=1`, `/edit 1 go=2027-09-10 back=2027-09-24`, `/edit 1 nobag`, `/edit 1 flex=2`, `back=none` = one way. Only what you write changes; the trip keeps its number but its price history restarts (new dates = different flight) |
 | `/stop <id>` | stop tracking a trip |
 | `/check` | check your trips now, reply with the cheapest per trip even if it is not a new low |
 | `/lang en` / `/lang he` | language of the price alerts (default English) |

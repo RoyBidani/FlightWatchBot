@@ -9,7 +9,7 @@ sent, prices = [], []
 main.send = lambda cid, text: sent.append(text) or True
 main.save = lambda: None
 main.SOURCES = {"fake": lambda t: [Offer(p, "ILS", "X", [["TLV", "LAX", t["out"] + " 05:00", t["out"] + " 20:00", "X1"]],
-                                         0, 900, b, "fake", "https://x") for p, b in prices]}
+                                         0, 900, b, "fake", "https://x", ret_date=t["ret"] or "") for p, b in prices]}
 main.state = main.load()
 
 
@@ -33,7 +33,8 @@ assert "Can't read" in chat("tomorrow")
 assert "Returning" in chat(out)
 assert "bag" in chat("one way").lower()
 assert "Direct" in chat("yes")
-assert "Direct only" in chat("yes")
+assert "Can your dates move" in chat("yes")
+assert "Tap one" in chat("maybe") and "Exact dates" in chat("exact")
 assert "Tracking #1" in chat("yes")
 t = main.state["trips"][0]
 assert t["bag"] and t["ret"] is None and t["stops"] == 0 and main.PENDING.pop() == {"trip_id": 1}
@@ -128,4 +129,19 @@ other = Offer(3000, "ILS", "Wizz", [["TLV", "AMS", "2027-04-20 09:00", "2027-04-
 main.add_bag_prices([g, k1, k2, other])
 assert (g.price, g.bag_included, g.bag_fee, g.bag_kg) == (4522, True, 484, 23) and g.source == "Google Flights", "cheapest bag fee for the same flight"
 assert other.price == 3000 and other.bag_included is None, "no bag price for an unmatched flight"
+from sources import date_pairs
+base = {"out": out, "ret": (datetime.now() + timedelta(days=70)).strftime("%Y-%m-%d")}
+assert len(list(date_pairs(base))) == 1 and len(list(date_pairs(base | {"flex": 1}))) == 9 and len(list(date_pairs(base | {"flex": 3}))) == 49
+assert len(list(date_pairs({"out": out, "ret": out, "flex": 1}))) == 6, "never return before going"
+ft = dict(main.DEFAULTS, origin="TLV", dest="AMS", out=base["out"], ret=base["ret"], flex=1, bag=False, stops=1, currency="ILS")
+d1 = lambda d, n: (datetime.fromisoformat(d) + timedelta(days=n)).strftime("%Y-%m-%d")
+mk = lambda o, r: Offer(1, "ILS", "X", [["TLV", "AMS", o + " 06:00", o + " 10:00", "X1"]], 0, 240, False, "f", "l", ret_date=r)
+assert main.matches(ft, mk(d1(out, -1), d1(base["ret"], 1))) and not main.matches(ft, mk(d1(out, -2), base["ret"]))
+assert not main.matches(dict(ft, flex=0), mk(d1(out, -1), base["ret"]))
+ft["id"] = 9
+txt = main.dates(ft, main.L["en"], main.asdict(mk(d1(out, -1), d1(base["ret"], 2))))
+assert "(1 day earlier)" in txt and "(2 days later)" in txt, txt
+assert "±1" in main.dates(ft) and "Flexible ±1 day (9 date combinations)" in main.summary(ft)
+r = main.handle({"chat": {"id": 7}, "text": f"/new TLV AMS {out} {base['ret']} flex=2"})
+assert "Flexible ±2 days" in r[0]
 print("ok")
